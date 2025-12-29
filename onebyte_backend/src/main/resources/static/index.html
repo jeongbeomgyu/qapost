@@ -1,0 +1,476 @@
+<!doctype html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>OneByte Auth + MyPage Test</title>
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 1100px; margin: 24px auto; padding: 0 12px; }
+        h1 { margin: 0 0 10px; }
+        h2 { margin: 0 0 10px; }
+        .muted { color: #6b7280; font-size: 12px; line-height: 1.5; margin-bottom: 12px; }
+        .pill { display: inline-block; padding: 3px 8px; border-radius: 999px; background: #eef2ff; font-size: 12px; margin-right: 6px; }
+        .status { padding: 10px; background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 10px; margin: 12px 0; }
+        .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+        .card { border: 1px solid #ddd; border-radius: 10px; padding: 14px; }
+        .row { display: grid; grid-template-columns: 140px 1fr; gap: 8px; align-items: center; margin-bottom: 8px; }
+        input, select { padding: 10px; border: 1px solid #ccc; border-radius: 8px; width: 100%; }
+        button { padding: 10px 12px; border: 0; border-radius: 10px; cursor: pointer; }
+        button.primary { background: #111827; color: #fff; }
+        button.secondary { background: #e5e7eb; }
+        button.danger { background: #ef4444; color: #fff; }
+        .actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
+        pre { white-space: pre-wrap; word-break: break-word; background: #0b1020; color: #d1d5db; padding: 12px; border-radius: 10px; overflow: auto; }
+        .split { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+        .hr { height: 1px; background: #e5e7eb; margin: 12px 0; }
+    </style>
+</head>
+
+<body>
+<h1>OneByte Auth + MyPage 테스트</h1>
+
+<div class="muted">
+    Auth:
+    <span class="pill">POST /api/users/register</span>
+    <span class="pill">POST /api/users/login</span>
+    <span class="pill">POST /api/users/logout</span><br/>
+    MyPage:
+    <span class="pill">GET /api/mypage/info</span>
+    <span class="pill">PATCH /api/mypage/update</span>
+    <span class="pill">PATCH /api/mypage/password</span>
+    <span class="pill" id="withdrawPill">POST /api/mypage/withdraw (임시)</span><br/>
+    - refreshToken 쿠키는 <b>HttpOnly</b>면 JS에서 안 보이는 게 정상<br/>
+    - 쿠키 저장/전송하려면 fetch에 <b>credentials: "include"</b> 필수<br/>
+    - 마이페이지는 accessToken을 <b>Authorization: Bearer</b>로 보냄
+</div>
+
+<div class="status" id="status">대기중</div>
+
+<div class="grid">
+    <div class="card">
+        <h2>회원가입</h2>
+        <div class="row"><div>이메일</div><input id="suEmail" placeholder="aaa2@aaa.com" /></div>
+        <div class="row"><div>비밀번호</div><input id="suPassword" type="password" placeholder="8~50자" /></div>
+        <div class="row"><div>이름</div><input id="suName" placeholder="허보미" /></div>
+        <div class="row"><div>닉네임</div><input id="suNickname" placeholder="bomi2" /></div>
+
+        <div class="actions">
+            <button class="primary" id="signupBtn">회원가입</button>
+            <button class="secondary" id="fillLoginBtn">가입정보 → 로그인칸 복사</button>
+        </div>
+
+        <div class="muted" style="margin-top:8px;">
+            ※ 지금 정책: 회원가입은 토큰 발급 X, 메시지만 리스폰스
+        </div>
+    </div>
+
+    <div class="card">
+        <h2>로그인 / 로그아웃</h2>
+        <div class="row"><div>이메일</div><input id="liEmail" placeholder="aaa2@aaa.com" /></div>
+        <div class="row"><div>비밀번호</div><input id="liPassword" type="password" placeholder="비밀번호" /></div>
+
+        <div class="actions">
+            <button class="primary" id="loginBtn">로그인</button>
+            <button class="danger" id="logoutBtn">로그아웃</button>
+            <button class="secondary" id="clearBtn">로컬 accessToken만 삭제</button>
+        </div>
+
+        <div class="muted" style="margin-top:8px;">
+            로그인 성공 시: 바디로 accessToken, 응답 헤더 Set-Cookie로 refreshToken 쿠키가 심어져야 정상
+        </div>
+    </div>
+</div>
+
+<div class="card" style="margin-top: 12px;">
+    <h2>현재 토큰 상태(로컬)</h2>
+    <div class="row"><div>isLoggedIn</div><div id="isLoggedIn">-</div></div>
+    <div class="row"><div>email(sub)</div><div id="meEmail">-</div></div>
+    <div class="row"><div>name</div><div id="meName">-</div></div>
+    <div class="row"><div>nickname</div><div id="meNickname">-</div></div>
+    <div class="row"><div>userId</div><div id="meUserId">-</div></div>
+    <div class="row"><div>roles</div><div id="meRoles">-</div></div>
+    <div class="row"><div>exp</div><div id="meExp">-</div></div>
+    <div class="row"><div>accessToken</div><input id="accessTokenBox" readonly /></div>
+
+    <div class="muted" style="margin-top:8px;">
+        ※ 아래 값은 “토큰 디코딩 결과”라서, 마이페이지 수정해도 자동으로 바뀌진 않음.<br/>
+        마이페이지 수정 후엔 “내 정보 조회(GET)”로 확인해. 토큰 정보 갱신은 보통 재로그인/재발급 때 반영됨.
+    </div>
+</div>
+
+<div class="card" style="margin-top: 12px;">
+    <h2>MyPage</h2>
+
+    <div class="split">
+        <div>
+            <h3 style="margin:0 0 10px;">내 정보 조회</h3>
+            <div class="actions">
+                <button class="primary" id="mypageGetBtn">조회</button>
+            </div>
+            <div class="muted" style="margin-top:8px;">
+                Authorization 헤더에 accessToken 있어야 함
+            </div>
+
+            <div class="hr"></div>
+
+            <h3 style="margin:0 0 10px;">이름/닉네임 수정</h3>
+            <div class="row"><div>name(선택)</div><input id="upName" placeholder="(비우면 기존값 유지)" /></div>
+            <div class="row"><div>nickname(선택)</div><input id="upNickname" placeholder="(비우면 기존값 유지)" /></div>
+            <div class="actions">
+                <button class="primary" id="mypagePatchInfoBtn">변경</button>
+            </div>
+            <div class="muted" style="margin-top:8px;">
+                빈 값이면 서버에서 기존 값 유지하도록 처리해둔 상태면 OK
+            </div>
+        </div>
+
+        <div>
+            <h3 style="margin:0 0 10px;">비밀번호 변경</h3>
+            <div class="row"><div>currentPassword</div><input id="curPw" type="password" placeholder="현재 비번" /></div>
+            <div class="row"><div>newPassword</div><input id="newPw" type="password" placeholder="새 비번 (8~50)" /></div>
+            <div class="actions">
+                <button class="primary" id="mypagePatchPwBtn">비밀번호 변경</button>
+            </div>
+
+            <div class="hr"></div>
+
+            <h3 style="margin:0 0 10px;">회원탈퇴(엔드포인트는 니가 맞춰)</h3>
+            <div class="row">
+                <div>method</div>
+                <select id="withdrawMethod">
+                    <option value="POST" selected>POST</option>
+                    <option value="DELETE">DELETE</option>
+                </select>
+            </div>
+            <div class="row"><div>url</div><input id="withdrawUrl" value="/api/mypage/withdraw" /></div>
+            <div class="actions">
+                <button class="danger" id="withdrawBtn">회원탈퇴 호출</button>
+            </div>
+            <div class="muted" style="margin-top:8px;">
+                탈퇴 성공하면 보통: accessToken 삭제 + refreshToken 쿠키 만료(Set-Cookie)까지 해주는 게 깔끔
+            </div>
+        </div>
+    </div>
+
+    <div class="hr"></div>
+
+    <h3 style="margin:0 0 10px;">MyPage 응답 표시</h3>
+    <pre id="mypageView">(아직 없음)</pre>
+</div>
+
+<div class="card" style="margin-top: 12px;">
+    <h2>디버그 로그</h2>
+    <pre id="log"></pre>
+</div>
+
+<script>
+    const API = {
+        REGISTER: "/api/users/register",
+        LOGIN: "/api/users/login",
+        LOGOUT: "/api/users/logout",
+
+        MYPAGE_GET: "/api/mypage/info",
+        MYPAGE_INFO: "/api/mypage/info",
+        MYPAGE_PW: "/api/mypage/password",
+    };
+
+    let accessToken = localStorage.getItem("accessToken") || "";
+
+    function setStatus(msg) {
+        document.getElementById("status").textContent = msg;
+    }
+
+    function setLog(obj) {
+        document.getElementById("log").textContent =
+            typeof obj === "string" ? obj : JSON.stringify(obj, null, 2);
+    }
+
+    function setMyPageView(obj) {
+        document.getElementById("mypageView").textContent =
+            typeof obj === "string" ? obj : JSON.stringify(obj, null, 2);
+    }
+
+    function decodeJwtPayload(token) {
+        try {
+            const parts = token.split(".");
+            if (parts.length !== 3) return null;
+            const base64Url = parts[1];
+            const base64 = base64Url.replace(/-/g, "+").replace(/_/g, "/");
+            const jsonPayload = decodeURIComponent(
+                atob(base64).split("").map(c => "%" + ("00" + c.charCodeAt(0).toString(16)).slice(-2)).join("")
+            );
+            return JSON.parse(jsonPayload);
+        } catch {
+            return null;
+        }
+    }
+
+    function renderAuthState() {
+        const token = accessToken;
+        const payload = token ? decodeJwtPayload(token) : null;
+
+        document.getElementById("accessTokenBox").value = token || "";
+        document.getElementById("isLoggedIn").textContent = token ? "YES" : "NO";
+
+        if (payload) {
+            document.getElementById("meEmail").textContent = payload.sub ?? "(없음)";
+            document.getElementById("meName").textContent = payload.name ?? "(없음)";
+            document.getElementById("meNickname").textContent = payload.nickname ?? "(없음)";
+            document.getElementById("meUserId").textContent = payload.userId ?? "(없음)";
+            document.getElementById("meRoles").textContent = payload.roles ?? "(없음)";
+            document.getElementById("meExp").textContent = payload.exp ? new Date(payload.exp * 1000).toLocaleString() : "(없음)";
+        } else {
+            document.getElementById("meEmail").textContent = "-";
+            document.getElementById("meName").textContent = "-";
+            document.getElementById("meNickname").textContent = "-";
+            document.getElementById("meUserId").textContent = "-";
+            document.getElementById("meRoles").textContent = "-";
+            document.getElementById("meExp").textContent = "-";
+        }
+    }
+
+    async function apiFetch(url, options = {}) {
+        const headers = { "Content-Type": "application/json", ...(options.headers || {}) };
+
+        if (accessToken) headers["Authorization"] = `Bearer ${accessToken}`;
+
+        const res = await fetch(url, {
+            ...options,
+            headers,
+            credentials: "include", // ✅ refreshToken 쿠키 저장/전송
+        });
+
+        const contentType = res.headers.get("content-type") || "";
+        let data = null;
+        if (contentType.includes("application/json")) data = await res.json().catch(() => null);
+        else data = await res.text().catch(() => null);
+
+        return { ok: res.ok, status: res.status, data, headers: Object.fromEntries(res.headers.entries()) };
+    }
+
+    async function doRegister() {
+        setStatus("회원가입 요청 중...");
+        setLog("");
+        setMyPageView("(아직 없음)");
+
+        const email = document.getElementById("suEmail").value.trim();
+        const password = document.getElementById("suPassword").value;
+        const name = document.getElementById("suName").value.trim();
+        const nickname = document.getElementById("suNickname").value.trim();
+
+        if (!email || !password || !name || !nickname) {
+            setStatus("회원가입 입력값 다 채워.");
+            return;
+        }
+
+        const body = { email, password, name, nickname };
+        const res = await apiFetch(API.REGISTER, { method: "POST", body: JSON.stringify(body) });
+
+        setLog({ step: "register", request: body, response: res });
+
+        if (!res.ok) {
+            setStatus(`회원가입 실패 (HTTP ${res.status})`);
+            return;
+        }
+
+        setStatus("회원가입 성공. (정책상 자동로그인 X) 이제 로그인 눌러.");
+    }
+
+    async function doLogin() {
+        setStatus("로그인 요청 중...");
+        setLog("");
+        setMyPageView("(아직 없음)");
+
+        const email = document.getElementById("liEmail").value.trim();
+        const password = document.getElementById("liPassword").value;
+
+        if (!email || !password) {
+            setStatus("로그인 입력값 채워.");
+            return;
+        }
+
+        const body = { email, password };
+        const res = await apiFetch(API.LOGIN, { method: "POST", body: JSON.stringify(body) });
+
+        setLog({ step: "login", request: body, response: res });
+
+        const token = res?.data?.accessToken;
+        if (res.ok && token) {
+            accessToken = token;
+            localStorage.setItem("accessToken", accessToken);
+            setStatus("로그인 성공! (refreshToken은 Set-Cookie로 심겨야 함)");
+            renderAuthState();
+            return;
+        }
+
+        setStatus(`로그인 실패 (HTTP ${res.status}) - 로그 확인`);
+    }
+
+    async function doLogout() {
+        setStatus("로그아웃 요청 중...");
+        setLog("");
+        setMyPageView("(아직 없음)");
+
+        const res = await apiFetch(API.LOGOUT, { method: "POST" });
+
+        // 프론트 accessToken 삭제
+        accessToken = "";
+        localStorage.removeItem("accessToken");
+        renderAuthState();
+
+        setLog({ step: "logout", response: res });
+
+        if (res.ok) setStatus("로그아웃 완료! (서버가 refreshToken 쿠키 만료 Set-Cookie 내려야 정상)");
+        else setStatus(`로그아웃 실패 (HTTP ${res.status})`);
+    }
+
+    function clearTokenOnly() {
+        accessToken = "";
+        localStorage.removeItem("accessToken");
+        setStatus("로컬 accessToken만 지웠다. (쿠키/서버 refresh는 그대로일 수 있음)");
+        setLog("");
+        setMyPageView("(아직 없음)");
+        renderAuthState();
+    }
+
+    function fillLoginFromSignup() {
+        document.getElementById("liEmail").value = document.getElementById("suEmail").value;
+        document.getElementById("liPassword").value = document.getElementById("suPassword").value;
+        setStatus("가입 정보로 로그인칸 채움. 이제 로그인 눌러.");
+    }
+
+    async function mypageGet() {
+        setStatus("내 정보 조회 중...");
+        setLog("");
+
+        if (!accessToken) {
+            setStatus("accessToken 없음. 로그인부터 해.");
+            return;
+        }
+
+        const res = await apiFetch(API.MYPAGE_GET, { method: "GET" });
+        setLog({ step: "mypage_get", response: res });
+
+        if (!res.ok) {
+            setStatus(`내 정보 조회 실패 (HTTP ${res.status})`);
+            setMyPageView(res);
+            return;
+        }
+
+        setStatus("내 정보 조회 성공");
+        setMyPageView(res.data);
+
+        // 편의상, 조회된 값으로 수정 입력칸 채워주기(있으면)
+        if (res.data) {
+            if (typeof res.data.name === "string") document.getElementById("upName").value = res.data.name;
+            if (typeof res.data.nickname === "string") document.getElementById("upNickname").value = res.data.nickname;
+        }
+    }
+
+    async function mypagePatchInfo() {
+        setStatus("이름/닉네임 수정 중...");
+        setLog("");
+
+        if (!accessToken) {
+            setStatus("accessToken 없음. 로그인부터 해.");
+            return;
+        }
+
+        const name = document.getElementById("upName").value;       // 서버에서 blank/null 처리해도 됨
+        const nickname = document.getElementById("upNickname").value;
+
+        const body = { name, nickname };
+        const res = await apiFetch(API.MYPAGE_INFO, { method: "PATCH", body: JSON.stringify(body) });
+
+        setLog({ step: "mypage_patch_info", request: body, response: res });
+
+        if (!res.ok) {
+            setStatus(`정보 수정 실패 (HTTP ${res.status})`);
+            return;
+        }
+
+        setStatus("정보 수정 성공. 바로 GET 눌러서 DB 반영 확인해.");
+    }
+
+    async function mypagePatchPassword() {
+        setStatus("비밀번호 변경 중...");
+        setLog("");
+
+        if (!accessToken) {
+            setStatus("accessToken 없음. 로그인부터 해.");
+            return;
+        }
+
+        const currentPassword = document.getElementById("curPw").value;
+        const newPassword = document.getElementById("newPw").value;
+
+        if (!currentPassword || !newPassword) {
+            setStatus("현재/새 비번 둘 다 넣어.");
+            return;
+        }
+
+        const body = { currentPassword, newPassword };
+        const res = await apiFetch(API.MYPAGE_PW, { method: "PATCH", body: JSON.stringify(body) });
+
+        setLog({ step: "mypage_patch_password", request: body, response: res });
+
+        if (!res.ok) {
+            setStatus(`비밀번호 변경 실패 (HTTP ${res.status})`);
+            return;
+        }
+
+        setStatus("비밀번호 변경 성공. (다음 로그인부터 새 비번으로)");
+        document.getElementById("curPw").value = "";
+        document.getElementById("newPw").value = "";
+    }
+
+    async function withdraw() {
+        setStatus("회원탈퇴 호출 중...");
+        setLog("");
+
+        if (!accessToken) {
+            setStatus("accessToken 없음. 로그인부터 해.");
+            return;
+        }
+
+        const method = document.getElementById("withdrawMethod").value;
+        const url = document.getElementById("withdrawUrl").value.trim();
+        if (!url) {
+            setStatus("withdraw url 비었음");
+            return;
+        }
+
+        const res = await apiFetch(url, { method });
+
+        setLog({ step: "withdraw", request: { method, url }, response: res });
+
+        if (res.ok) {
+            // 성공하면 로컬 토큰 정리
+            accessToken = "";
+            localStorage.removeItem("accessToken");
+            renderAuthState();
+            setStatus("회원탈퇴 성공(가정). accessToken 삭제함. 쿠키 만료는 서버가 Set-Cookie로 해줘야 깔끔");
+        } else {
+            setStatus(`회원탈퇴 실패 (HTTP ${res.status})`);
+        }
+    }
+
+    window.addEventListener("DOMContentLoaded", () => {
+        document.getElementById("signupBtn").addEventListener("click", doRegister);
+        document.getElementById("loginBtn").addEventListener("click", doLogin);
+        document.getElementById("logoutBtn").addEventListener("click", doLogout);
+        document.getElementById("clearBtn").addEventListener("click", clearTokenOnly);
+        document.getElementById("fillLoginBtn").addEventListener("click", fillLoginFromSignup);
+
+        document.getElementById("mypageGetBtn").addEventListener("click", mypageGet);
+        document.getElementById("mypagePatchInfoBtn").addEventListener("click", mypagePatchInfo);
+        document.getElementById("mypagePatchPwBtn").addEventListener("click", mypagePatchPassword);
+        document.getElementById("withdrawBtn").addEventListener("click", withdraw);
+
+        // UI 표시용
+        document.getElementById("withdrawPill").textContent = "POST /api/mypage/withdraw (임시)";
+        renderAuthState();
+    });
+</script>
+</body>
+</html>
