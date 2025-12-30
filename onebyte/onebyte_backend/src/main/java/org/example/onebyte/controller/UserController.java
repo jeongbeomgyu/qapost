@@ -26,7 +26,7 @@ public class UserController {
     @PostMapping("/register")
     public ResponseEntity<MessageResponse> createUser(@Valid @RequestBody RegisterRequest request) {
         userService.register(request);
-        return ResponseEntity.status(HttpStatus.CREATED).body(new MessageResponse("회원가입을 축하드립니다."));
+        return ResponseEntity.status(HttpStatus.CREATED).body(new MessageResponse("회원가입을 완료합니다."));
     }
 
     // 로그인

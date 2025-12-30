@@ -3,6 +3,7 @@ package org.example.onebyte.security;
 import lombok.RequiredArgsConstructor;
 import org.example.onebyte.entity.User;
 import org.example.onebyte.repository.UserRepository;
+import org.example.onebyte.type.UserStatus;
 import org.springframework.security.authentication.DisabledException;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
@@ -25,7 +26,7 @@ public class CustomUserDetailsService implements UserDetailsService {
                         new UsernameNotFoundException("사용자를 찾을 수 없습니다: " + email)
                 );
 
-        if (Boolean.FALSE.equals(user.getIsActive())) {
+        if (UserStatus.WITHDRAWN_BY_USER.equals(user.getStatus())) {
             throw new DisabledException("비활성화된 사용자입니다.");
         }
 

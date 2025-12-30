@@ -13,6 +13,7 @@ import org.example.onebyte.repository.BoardRepository;
 import org.example.onebyte.repository.CommentRepository;
 import org.example.onebyte.repository.RefreshTokenRepository;
 import org.example.onebyte.repository.UserRepository;
+import org.example.onebyte.type.UserStatus;
 import org.springframework.data.domain.Pageable;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -88,12 +89,12 @@ public class MyPageServiceImpl implements MyPageService {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new AuthenticationFailedException("사용자가 존재하지 않습니다."));
 
-        if (Boolean.FALSE.equals(user.getIsActive())) {
+        if (UserStatus.WITHDRAWN_BY_USER.equals(user.getStatus())) {
             return; // 이미 탈퇴한 유저면 그냥 조용히 끝내도 됨(정책)
         }
 
         //isActive = false
-        user.deactivate();
+        user.withdrawByUser();
 
         //refresh토큰 함께 압수
         refreshTokenRepository.deleteByUserId(userId);

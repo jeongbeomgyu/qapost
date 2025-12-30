@@ -11,6 +11,7 @@ import org.example.onebyte.exception.DuplicateResourceException;
 import org.example.onebyte.repository.RefreshTokenRepository;
 import org.example.onebyte.repository.UserRepository;
 import org.example.onebyte.security.JwtTokenizer;
+import org.example.onebyte.type.UserStatus;
 import org.example.onebyte.util.CookieUtil;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -35,35 +36,40 @@ public class UserServiceImpl implements UserService {
     //추후 변경가능
     private long refreshMaxAgeSeconds = 24 * 60 * 60L;
 
-    // isActive=false 탈퇴로 인한 이슈 발생
     // 회원가입
     @Override
     public MessageResponse register(RegisterRequest request) {
 
         User existing = userRepository.findByEmail(request.getEmail()).orElse(null);
 
-        // 이미 이메일이 있는데 활성 유저면 -> 중복 에러
-        if (existing != null && Boolean.TRUE.equals(existing.getIsActive())) {
+        // 이미 ACTIVE면 중복
+        if (existing != null && existing.getStatus() == UserStatus.ACTIVE) {
             throw DuplicateResourceException.userEmail(request.getEmail());
         }
 
         // 닉네임 중복 체크
         if (existing == null) {
-            // 신규 가입
             if (userRepository.existsByNickname(request.getNickname())) {
                 throw DuplicateResourceException.userNickname(request.getNickname());
             }
         } else {
-            // 복구 가입(또는 기존 유저)
-            // 본인 제외하고 닉네임이 존재하면 중복
-            if (userRepository.existsByNicknameAndIdNot(request.getNickname(), existing.getId())) {
+            // 차단 유저는 재가입 불가
+            if (existing.getStatus() == UserStatus.BANNED_BY_ADMIN) {
+                throw new AuthenticationFailedException("차단된 회원은 재가입할 수 없습니다.");
+            }
+
+            // WITHDRAWN 복구 시 닉네임 충돌 검사
+            if (userRepository.existsByNicknameAndIdNot(
+                    request.getNickname(),
+                    existing.getId()
+            )) {
                 throw DuplicateResourceException.userNickname(request.getNickname());
             }
         }
 
         String passwordHash = passwordEncoder.encode(request.getPassword());
 
-        //신규가입
+        // 신규 가입
         if (existing == null) {
             User user = User.createForRegister(
                     request.getName(),
@@ -75,14 +81,16 @@ public class UserServiceImpl implements UserService {
             return new MessageResponse("회원가입을 완료합니다.");
         }
 
-        //탈퇴 유저 복구
-        existing.activate(); // isActive = true
-        existing.changeInfo(request.getName().trim(), request.getNickname().trim());
-        existing.changePasswordHash(passwordHash);
+        // 탈퇴 유저 복구 (WITHDRAWN → ACTIVE)
+        existing.reactivate(
+                request.getName().trim(),
+                request.getNickname().trim(),
+                passwordHash
+        );
 
-        // JPA 더티체킹으로 저장됨
         return new MessageResponse("회원가입을 완료합니다.");
     }
+
 
     // 로그인
     @Override
@@ -92,8 +100,11 @@ public class UserServiceImpl implements UserService {
                 .orElseThrow(() -> new AuthenticationFailedException("이메일 또는 비밀번호가 올바르지 않습니다."));
 
         // 비활성 유저도 로그인 실패(메시지 통일)
-        if (Boolean.FALSE.equals(user.getIsActive())) {
+        if (UserStatus.WITHDRAWN_BY_USER.equals(user.getStatus())) {
             throw new AuthenticationFailedException("이메일 또는 비밀번호가 올바르지 않습니다.");
+        }
+        else if (UserStatus.BANNED_BY_ADMIN.equals(user.getStatus())){
+            throw new AuthenticationFailedException("관리자에 의해 차단당한 사용자 입니다.");
         }
 
         // 비밀번호 검증
@@ -174,8 +185,11 @@ public class UserServiceImpl implements UserService {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new AuthenticationFailedException("유효하지 않은 refreshToken 입니다."));
 
-        if (Boolean.FALSE.equals(user.getIsActive())) {
+        if (UserStatus.WITHDRAWN_BY_USER .equals(user.getStatus())) {
             throw new AuthenticationFailedException("탈퇴한 사용자입니다.");
+        }
+        else if (UserStatus.BANNED_BY_ADMIN  .equals(user.getStatus())){
+            throw new AuthenticationFailedException("차단 당한 사용자입니다.");
         }
 
         RefreshToken saved = refreshTokenRepository.findByUserId(userId)

@@ -4,6 +4,8 @@ import jakarta.persistence.*;
 import lombok.*;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
 
 @Entity
 @Table(name = "boards")
@@ -24,6 +26,14 @@ public class Board {
             foreignKey = @ForeignKey(name = "fk_boards_category")
     )
     private Category category;
+
+    @OneToMany(
+            mappedBy = "board",
+            cascade = CascadeType.REMOVE,
+            orphanRemoval = true
+    )
+
+    private List<Comment> comments = new ArrayList<>();
 
     // FK: users.id
     @Column(name = "user_id", nullable = false)

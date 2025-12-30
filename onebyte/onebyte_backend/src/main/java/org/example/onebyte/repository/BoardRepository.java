@@ -180,5 +180,6 @@ public interface BoardRepository extends JpaRepository<Board, Long> {
            """)
     boolean existsByGroupId(@Param("groupId") Long groupId);
 
+    void deleteByUserId(Long userId);
 
 }

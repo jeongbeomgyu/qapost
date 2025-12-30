@@ -4,6 +4,7 @@ import lombok.Builder;
 import lombok.Getter;
 import org.example.onebyte.entity.User;
 import org.example.onebyte.type.Role;
+import org.example.onebyte.type.UserStatus;
 
 import java.time.LocalDateTime;
 
@@ -16,7 +17,7 @@ public class UserResponse {
     private String nickname;
     private String email;
     private Role role;
-    private Boolean isActive;
+    private UserStatus status;
     private LocalDateTime createdAt;
 
     public static UserResponse from(User user) {
@@ -26,7 +27,7 @@ public class UserResponse {
                 .nickname(user.getNickname())
                 .email(user.getEmail())
                 .role(user.getRole())
-                .isActive(user.getIsActive())
+                .status(user.getStatus())
                 .createdAt(user.getCreatedAt())
                 .build();
     }

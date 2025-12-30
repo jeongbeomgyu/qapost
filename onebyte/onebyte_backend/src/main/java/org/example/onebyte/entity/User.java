@@ -3,6 +3,7 @@ package org.example.onebyte.entity;
 import jakarta.persistence.*;
 import lombok.*;
 import org.example.onebyte.type.Role;
+import org.example.onebyte.type.UserStatus;
 
 import java.time.LocalDateTime;
 
@@ -10,6 +11,7 @@ import java.time.LocalDateTime;
 @Table(name = "users")
 @Getter
 @Setter
+@Builder
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 @AllArgsConstructor(access = AccessLevel.PRIVATE)
 public class User {
@@ -33,8 +35,13 @@ public class User {
     @Column(name = "role", nullable = false, length = 20)
     private Role role;
 
-    @Column(name = "is_active", nullable = false)
-    private Boolean isActive;
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
+    private UserStatus status = UserStatus.ACTIVE;
+
+    @Column(name = "ban_reason")
+    private String banReason;
+
 
     //CREATED_AT, UPDATE_AT 자동 업데이트
     @Column(name = "created_at", insertable = false, updatable = false)
@@ -43,22 +50,41 @@ public class User {
     @Column(name = "updated_at", insertable = false, updatable = false)
     private LocalDateTime updatedAt;
 
-    //회원가입용 생성 메서드
-    public static User createForRegister(String name, String  nickname, String email, String passwordHash) {
-        return new User(
-                null,
-                name,
-                nickname,
-                email,
-                passwordHash,
-                Role.ROLE_USER,
-                true,
-                null,
-                null
-        );
+    public User(
+            Long id,
+            String name,
+            String nickname,
+            String email,
+            String passwordHash,
+            Role role,
+            UserStatus status,
+            String banReason
+    ) {
+        this.id = id;
+        this.name = name;
+        this.nickname = nickname;
+        this.email = email;
+        this.passwordHash = passwordHash;
+        this.role = role;
+        this.status = status;
+        this.banReason = banReason;
     }
 
-    //도메인 메서드
+    //회원가입용 생성 메서드
+    public static User createForRegister(String name, String nickname, String email, String passwordHash) {
+        return User.builder()
+                .name(name.trim())
+                .nickname(nickname.trim())
+                .email(email.trim())
+                .passwordHash(passwordHash)
+                .role(Role.ROLE_USER)
+                .status(UserStatus.ACTIVE)
+                .banReason(null)
+                .build();
+    }
+
+
+    // 도메인 메서드
     public void changeInfo(String name, String nickname) {
         this.name = name;
         this.nickname = nickname;
@@ -68,10 +94,34 @@ public class User {
         this.passwordHash = passwordHash;
     }
 
-    public void deactivate() { // 회원 비활성화(삭제 대신)
-        this.isActive = false;
+
+    // status 관련 도메인
+    public boolean isActive() {
+        return this.status == UserStatus.ACTIVE;
     }
 
-    //탈퇴회원 재가입을 위해
-    public void activate() { this.isActive = true; }
+    // 사용자 직접 탈퇴
+    public void withdrawByUser() {
+        this.status = UserStatus.WITHDRAWN_BY_USER;
+    }
+
+    // 관리자에 의한 차단
+    public void banByAdmin(String reason) {
+        this.status = UserStatus.BANNED_BY_ADMIN;
+        this.banReason = reason;
+    }
+
+    // 관리자에 의한 차단 해제
+    public void unbanToWithdrawn() {
+        this.status = UserStatus.WITHDRAWN_BY_USER;
+        this.banReason = null;
+    }
+
+    // 사용자 재가입
+    public void reactivate(String email, String nicknamem,String passwordHash) {
+        this.status = UserStatus.ACTIVE;
+        this.email = email;
+        this.nickname = nicknamem;
+        this.passwordHash = passwordHash;
+    }
 }
