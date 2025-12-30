@@ -70,4 +70,3 @@ EOF
 echo -e "\n${GREEN}=== 배포 완료 ===${NC}"
 echo -e "프론트엔드: ${YELLOW}http://${EC2_IP}:3000${NC}"
 echo -e "백엔드 API: ${YELLOW}http://${EC2_IP}:8080${NC}"
-
