@@ -1,0 +1,14 @@
+
+.idea/
+.vscode/
+*.iml
+.DS_Store
+Thumbs.db
+
+
+build/
+.gradle/
+
+# Git
+.git/
+.gitignore
