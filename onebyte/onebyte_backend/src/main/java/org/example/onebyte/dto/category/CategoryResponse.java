@@ -17,7 +17,6 @@ public class CategoryResponse {
     public static CategoryResponse from(Category category) {
         return CategoryResponse.builder()
                 .id(category.getId())
-                .code(category.getCode())
                 .name(category.getName())
                 .isActive(category.isActive())
                 .build();

@@ -17,9 +17,13 @@ public class Board {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    // FK: categorys.id (DDL상 테이블명 categorys지만 컬럼은 category_id)
-    @Column(name = "category_id", nullable = false)
-    private Long categoryId;
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(
+            name = "category_id",
+            nullable = false,
+            foreignKey = @ForeignKey(name = "fk_boards_category")
+    )
+    private Category category;
 
     // FK: users.id
     @Column(name = "user_id", nullable = false)
@@ -43,9 +47,9 @@ public class Board {
     @Column(name = "updated_at", nullable = false, insertable = false, updatable = false)
     private LocalDateTime updatedAt;
 
-    public static Board create(Long categoryId, Long userId, String title, String content) {
+    public static Board create(Category category, Long userId, String title, String content) {
         return Board.builder()
-                .categoryId(categoryId)
+                .category(category)
                 .userId(userId)
                 .title(title)
                 .content(content)
@@ -53,12 +57,11 @@ public class Board {
                 .build();
     }
 
-    public void update(Long categoryId, String title, String content) {
-        this.categoryId = categoryId;
+    public void update(Category category, String title, String content) {
+        this.category = category;
         this.title = title;
         this.content = content;
     }
-
 
     // 추후 개발
     public void increaseViewCount() {

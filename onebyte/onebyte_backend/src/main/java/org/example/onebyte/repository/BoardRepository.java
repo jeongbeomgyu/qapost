@@ -13,27 +13,23 @@ import org.springframework.transaction.annotation.Transactional;
 public interface BoardRepository extends JpaRepository<Board, Long> {
 
     // 카테고리 삭제할 때, 삭제한 카테고리의 Id 를 강제로 교체 시킴
-    @Modifying(clearAutomatically = true)
-    @Query("UPDATE Board b SET b.categoryId = :etcId WHERE b.categoryId = :targetId")
-    void updateCategoryBatch(@Param("targetId") Long targetId, @Param("etcId") Long etcId);
-
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("""
+       UPDATE Board b
+       SET b.category.id = :etcId
+       WHERE b.category.id = :targetId
+       """)
+    int updateCategoryBatch(@Param("targetId") Long targetId,
+                            @Param("etcId") Long etcId);
 
     // 활성 카테고리 글만 조회 (native join)
-    @Query(
-            value = """
-                SELECT b.*
-                FROM boards b
-                JOIN categorys c ON b.category_id = c.id
-                WHERE c.is_active = true
-            """,
-            countQuery = """
-                SELECT COUNT(*)
-                FROM boards b
-                JOIN categorys c ON b.category_id = c.id
-                WHERE c.is_active = true
-            """,
-            nativeQuery = true
-    )
+    @Query("""
+            select b
+            from Board b
+            join b.category c
+            where c.isActive = true
+            order by b.createdAt desc
+            """)
     Page<Board> findAllVisibleBoards(Pageable pageable);
 
     // 카테고리별 조회 (활성 카테고리 + 특정 categoryId)
@@ -41,7 +37,7 @@ public interface BoardRepository extends JpaRepository<Board, Long> {
             value = """
             SELECT b.*
             FROM boards b
-            JOIN categorys c ON b.category_id = c.id
+            JOIN categories c ON b.category_id = c.id
             WHERE c.is_active = true
               AND b.category_id = :categoryId
             ORDER BY b.created_at DESC
@@ -49,7 +45,7 @@ public interface BoardRepository extends JpaRepository<Board, Long> {
             countQuery = """
             SELECT COUNT(*)
             FROM boards b
-            JOIN categorys c ON b.category_id = c.id
+            JOIN categories c ON b.category_id = c.id
             WHERE c.is_active = true
               AND b.category_id = :categoryId
         """,
@@ -90,7 +86,7 @@ public interface BoardRepository extends JpaRepository<Board, Long> {
             value = """
         SELECT b.*
         FROM boards b
-        JOIN categorys c ON b.category_id = c.id
+        JOIN categories c ON b.category_id = c.id
         WHERE c.is_active = true
           AND b.category_id = :categoryId
           AND b.title LIKE CONCAT('%', :q, '%')
@@ -99,7 +95,7 @@ public interface BoardRepository extends JpaRepository<Board, Long> {
             countQuery = """
         SELECT COUNT(*)
         FROM boards b
-        JOIN categorys c ON b.category_id = c.id
+        JOIN categories c ON b.category_id = c.id
         WHERE c.is_active = true
           AND b.category_id = :categoryId
           AND b.title LIKE CONCAT('%', :q, '%')
@@ -117,7 +113,7 @@ public interface BoardRepository extends JpaRepository<Board, Long> {
             value = """
         SELECT b.*
         FROM boards b
-        JOIN categorys c ON b.category_id = c.id
+        JOIN categories c ON b.category_id = c.id
         WHERE c.is_active = true
           AND b.category_id = :categoryId
           AND b.content LIKE CONCAT('%', :q, '%')
@@ -126,7 +122,7 @@ public interface BoardRepository extends JpaRepository<Board, Long> {
             countQuery = """
         SELECT COUNT(*)
         FROM boards b
-        JOIN categorys c ON b.category_id = c.id
+        JOIN categories c ON b.category_id = c.id
         WHERE c.is_active = true
           AND b.category_id = :categoryId
           AND b.content LIKE CONCAT('%', :q, '%')
@@ -144,7 +140,7 @@ public interface BoardRepository extends JpaRepository<Board, Long> {
             value = """
         SELECT b.*
         FROM boards b
-        JOIN categorys c ON b.category_id = c.id
+        JOIN categories c ON b.category_id = c.id
         WHERE c.is_active = true
           AND b.category_id = :categoryId
           AND (
@@ -156,7 +152,7 @@ public interface BoardRepository extends JpaRepository<Board, Long> {
             countQuery = """
         SELECT COUNT(*)
         FROM boards b
-        JOIN categorys c ON b.category_id = c.id
+        JOIN categories c ON b.category_id = c.id
         WHERE c.is_active = true
           AND b.category_id = :categoryId
           AND (
@@ -172,6 +168,17 @@ public interface BoardRepository extends JpaRepository<Board, Long> {
             Pageable pageable
     );
 
+    // 카테고리 삭제 체크용
+    // 삭제하고자 하는 카테고리에 글이 하나라도 있으면 삭제불가
+    boolean existsByCategoryId(Long categoryId);
+
+    @Query("""
+           select (count(b) > 0)
+           from Board b
+           join b.category c
+           where c.group.id = :groupId
+           """)
+    boolean existsByGroupId(@Param("groupId") Long groupId);
 
 
 }

@@ -4,10 +4,12 @@ import lombok.RequiredArgsConstructor;
 import org.example.onebyte.dto.board.BoardRequest;
 import org.example.onebyte.dto.board.BoardResponse;
 import org.example.onebyte.entity.Board;
+import org.example.onebyte.entity.Category;
 import org.example.onebyte.entity.User;
 import org.example.onebyte.exception.PostNotFoundException;
 import org.example.onebyte.repository.BoardRepository;
 import org.example.onebyte.repository.UserRepository;
+import org.example.onebyte.repository.category.CategoryRepository;
 import org.example.onebyte.type.Role;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -24,6 +26,7 @@ public class BoardServiceImpl implements BoardService {
 
     private final BoardRepository boardRepository;
     private final UserRepository userRepository;
+    private final CategoryRepository categoryRepository;
 
     @Override
     @Transactional(readOnly = true)
@@ -82,8 +85,11 @@ public class BoardServiceImpl implements BoardService {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new IllegalArgumentException("유저가 없습니다. id=" + userId));
 
+        Category category = categoryRepository.findById(request.categoryId())
+                .orElseThrow(() -> new IllegalArgumentException("카테고리를 찾을 수 없습니다."));
+
         Board board = Board.builder()
-                .categoryId(request.categoryId())
+                .category(category)
                 .title(request.title())
                 .content(request.content())
                 .userId(user.getId())
@@ -102,7 +108,10 @@ public class BoardServiceImpl implements BoardService {
             throw new AccessDeniedException("작성자만 수정할 수 있습니다.");
         }
 
-        board.update(request.categoryId(), request.title(), request.content());
+        Category category = categoryRepository.findById(request.categoryId())
+                .orElseThrow(() -> new IllegalArgumentException("카테고리를 찾을 수 없습니다."));
+
+        board.update(category, request.title(), request.content());
         return BoardResponse.from(board);
     }
 

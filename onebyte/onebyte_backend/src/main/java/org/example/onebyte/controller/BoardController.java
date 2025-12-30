@@ -46,6 +46,7 @@ public class BoardController {
         return ResponseEntity.ok(boardService.getBoardsByCategory(categoryId, pageable));
     }
 
+
     // 게시물 단건 조회 : 모든 사람 가능
     @GetMapping("/{boardId}")
     public ResponseEntity<BoardResponse> findByBoardId(@PathVariable Long boardId) {
@@ -90,6 +91,7 @@ public class BoardController {
         BoardResponse response = boardService.update(boardId, userId, request);
         return ResponseEntity.ok(response);
     }
+
 
     // 게시물 삭제 : 작성자 또는 관리자
     @DeleteMapping("/{boardId}")

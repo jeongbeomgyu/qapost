@@ -1,12 +1,13 @@
 package org.example.onebyte.dto.board;
 
 import org.example.onebyte.entity.Board;
+import org.example.onebyte.entity.Category;
 
 import java.time.LocalDateTime;
 
 public record BoardResponse(
         Long id,
-        Long categoryId,
+        Category category,
         String title,
         String content,
         Long userId,
@@ -17,7 +18,7 @@ public record BoardResponse(
     public static BoardResponse from(Board board) {
         return new BoardResponse(
                 board.getId(),
-                board.getCategoryId(),
+                board.getCategory(),
                 board.getTitle(),
                 board.getContent(),
                 board.getUserId(),
