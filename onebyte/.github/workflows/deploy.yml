@@ -3,6 +3,7 @@ name: Deploy to EC2 with Docker
 on:
   push:
     branches: [ "feature" ]
+  workflow_dispatch: # 수동 실행 버튼 추가
 
 jobs:
   deploy:
@@ -17,21 +18,18 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      # [중요] 빌드 및 푸시 단계 수정
-      - name: Build and Push Images
+      - name: Build and Push Backend Image
         run: |
-          
           docker build --platform linux/amd64 -t ${{ secrets.DOCKERHUB_USERNAME }}/board-project-backend:latest ./onebyte_backend
           docker push ${{ secrets.DOCKERHUB_USERNAME }}/board-project-backend:latest
 
-        
-        
+      - name: Build and Push Frontend Image
+        run: |
           docker build --no-cache --platform linux/amd64 \
             --build-arg VITE_API_URL=http://${{ secrets.EC2_IP }}:8080 \
             -t ${{ secrets.DOCKERHUB_USERNAME }}/board-project-frontend:latest ./onebyte_test_frontend
           docker push ${{ secrets.DOCKERHUB_USERNAME }}/board-project-frontend:latest
 
-      # 3. EC2 서버로 설정 파일 전송
       - name: Copy Config Files to EC2
         uses: appleboy/scp-action@master
         with:
@@ -40,9 +38,7 @@ jobs:
           key: ${{ secrets.EC2_SSH_KEY }}
           source: "docker-compose.yml,deploy-ec2.sh"
           target: "~/onebyte"
-          strip_components: 0 # 경로 유지를 위해 추가
 
-      # 4. 서버 원격 실행
       - name: Execute Deployment Script
         uses: appleboy/ssh-action@master
         with:
