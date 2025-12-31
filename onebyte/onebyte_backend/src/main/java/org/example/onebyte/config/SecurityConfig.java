@@ -40,7 +40,12 @@ public class SecurityConfig {
         CorsConfiguration config = new CorsConfiguration();
 
         // Vite 기본 포트: 5173 (너 프론트 주소가 다르면 여기 바꿔)
-        config.setAllowedOrigins(List.of("http://localhost:5173"));
+        config.setAllowedOriginPatterns(List.of(
+            "http://localhost:5173",
+            "http://localhost:3000",
+            "http://44.220.167.111:3000",
+            "http://44.220.167.111" // 포트 없는 버전도 혹시 모르니 추가
+        ));
 
         config.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
         config.setAllowedHeaders(List.of("*"));
@@ -60,13 +65,14 @@ public class SecurityConfig {
 
         http
                 // Spring Security에서 CORS를 "실제로" 켬
-                .cors(cors -> {})
+               .cors(cors -> cors.configurationSource(corsConfigurationSource()))
 
                 .csrf(csrf -> csrf.disable())
                 .sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .exceptionHandling(ex -> ex.authenticationEntryPoint(authenticationEntryPoint))
 
-                .authorizeHttpRequests(auth -> auth
+                .authorizeHttpRequests(auth -> auth 
+                        .requestMatchers("/favicon.ico").permitAll()
                         // CORS preflight (브라우저 OPTIONS) 무조건 허용
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
 

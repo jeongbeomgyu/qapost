@@ -1,0 +1,61 @@
+version: '3.8'
+services:
+  mysql:
+    image: mysql:8.0
+    platform: linux/amd64
+    container_name: onebyte-mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: root1234
+      MYSQL_DATABASE: qadb
+      MYSQL_USER: onebyte       
+      MYSQL_PASSWORD: onebyte1234!
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-proot1234"]
+      interval: 3s  # 3초마다 체크
+      timeout: 3s
+      retries: 10
+      start_period: 20s
+    restart: unless-stopped
+    networks:
+      - onebyte-network
+
+  backend:
+    image: jeongbeomgyu/board-project-backend:latest
+    container_name: onebyte-backend
+    ports:
+      - "8080:8080"
+    depends_on:
+      mysql:
+        condition: service_healthy
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/qadb?serverTimezone=Asia/Seoul&characterEncoding=UTF-8
+      SPRING_DATASOURCE_USERNAME: onebyte
+      SPRING_DATASOURCE_PASSWORD: onebyte1234!
+      SPRING_DATASOURCE_HIKARI_INITIALIZATION_FAIL_TIMEOUT: 30000
+      SPRING_JPA_PROPERTIES_HIBERNATE_DIALECT: org.hibernate.dialect.MySQLDialect
+      SPRING_JPA_HIBERNATE_DDL_AUTO: update
+    restart: unless-stopped
+    networks:
+      - onebyte-network
+
+  frontend:
+    image: jeongbeomgyu/board-project-frontend:latest
+    container_name: onebyte-frontend
+    ports:
+      - "3000:80"
+    depends_on:
+      - backend
+    restart: unless-stopped
+    networks:
+      - onebyte-network
+
+volumes:
+  mysql_data:
+
+networks:
+  onebyte-network:
+    driver: bridge
