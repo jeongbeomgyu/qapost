@@ -37,6 +37,13 @@ public class CommentServiceImpl implements CommentService {
         return page.map(CommentResponse::from);
     }
 
+    @Override
+    @Transactional(readOnly = true)
+    public List<CommentResponse> listMyComments(Long userId, Pageable pageable) {
+        return commentRepository.findMyComments(userId, pageable).getContent();
+    }
+
+
     //댓글 생성
     @Override
     public CommentResponse create(Long boardId, Long userId, CommentRequest request) {
@@ -49,6 +56,8 @@ public class CommentServiceImpl implements CommentService {
 
         Comment comment = Comment.create(board, user, request.content());
         Comment saved = commentRepository.save(comment);
+
+        boardRepository.increaseCommentCount(boardId);
 
         return CommentResponse.from(saved);
     }
@@ -83,6 +92,9 @@ public class CommentServiceImpl implements CommentService {
         if (!isAuthor && !isAdmin) {
             throw new AccessDeniedException("작성자 또는 관리자만 삭제할 수 있습니다.");
         }
+
+        boardRepository.decreaseCommentCount(commentId);
+
         commentRepository.delete(comment);
     }
 

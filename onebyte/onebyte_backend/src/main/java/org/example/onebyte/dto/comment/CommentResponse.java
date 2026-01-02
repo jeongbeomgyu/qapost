@@ -4,10 +4,10 @@ import org.example.onebyte.entity.Comment;
 
 import java.time.LocalDateTime;
 
-// 닉네임까지 반환
 public record CommentResponse(
         Long id,
         Long boardId,
+        String boardTitle,      // ✅ 추가
         Long userId,
         String userNickname,
         String content,
@@ -18,8 +18,9 @@ public record CommentResponse(
         return new CommentResponse(
                 comment.getId(),
                 comment.getBoard().getId(),
+                comment.getBoard().getTitle(),     // ✅ 추가
                 comment.getUser().getId(),
-                comment.getUser().getNickname(),
+                comment.getUserNickname(),
                 comment.getContent(),
                 comment.getCreatedAt(),
                 comment.getUpdatedAt()

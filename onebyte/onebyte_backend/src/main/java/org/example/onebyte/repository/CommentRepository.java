@@ -16,24 +16,29 @@ public interface CommentRepository extends JpaRepository<Comment, Long> {
     Page<Comment> findByBoard_Id(Long boardId, Pageable pageable);
 
     // 유저id로 작성한 댓글 모두 조회
+    // 유저id로 작성한 댓글 모두 조회 (페이징)
     @Query("""
-        select new org.example.onebyte.dto.comment.CommentResponse(
-            c.id,
-            b.id,
-            u.id,
-            u.nickname,
-            c.content,
-            c.createdAt,
-            c.updatedAt
-        )
-        from Comment c
-        join c.board b
-        join c.user u
-        where u.id = :userId
-        order by c.createdAt desc
-    """)
-    List<CommentResponse> findMyComments(@Param("userId") Long userId, Pageable pageable);
+    select new org.example.onebyte.dto.comment.CommentResponse(
+        c.id,
+        b.id,
+        b.title,
+        u.id,
+        u.nickname,
+        c.content,
+        c.createdAt,
+        c.updatedAt
+    )
+    from Comment c
+    join c.board b
+    join c.user u
+    where u.id = :userId
+    order by c.createdAt desc
+""")
+    Page<CommentResponse> findMyComments(@Param("userId") Long userId, Pageable pageable);
+
+
 
     void deleteByUserId(Long userId);
 
+    long countByUserId(Long userId);
 }

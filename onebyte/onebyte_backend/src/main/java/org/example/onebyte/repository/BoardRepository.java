@@ -182,4 +182,18 @@ public interface BoardRepository extends JpaRepository<Board, Long> {
 
     void deleteByUserId(Long userId);
 
+    // 동시성을 고려해서 엔티티 메서드 말고 쿼리로 원자적 처리
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("update Board b set b.commentCount = b.commentCount + 1 where b.id = :boardId")
+    int increaseCommentCount(@Param("boardId") Long boardId);
+
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("""
+        update Board b 
+        set b.commentCount = case when b.commentCount > 0 then b.commentCount - 1 else 0 end
+        where b.id = :boardId
+    """)
+    int decreaseCommentCount(@Param("boardId") Long boardId);
+
+    long countByUserId(Long userId);
 }

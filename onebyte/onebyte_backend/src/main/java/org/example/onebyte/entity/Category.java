@@ -45,4 +45,5 @@ public class Category extends BaseCategoryEntity {
     public void changeGroup(CategoryGroup group) {
         this.group = group;
     }
+
 }

@@ -25,5 +25,6 @@ public interface CommentService {
     //댓글 삭제
     void delete(Long commentId, Long userId);
 
+    List<CommentResponse> listMyComments(Long userId, Pageable pageable);
 
 }

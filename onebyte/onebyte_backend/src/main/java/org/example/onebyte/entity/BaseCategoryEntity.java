@@ -23,7 +23,7 @@ public abstract class BaseCategoryEntity {
     private int sortOrder = 0;
 
     @Column(name = "is_active", nullable = false)
-    private boolean isActive = true;
+    private boolean isActive = false;
 
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
@@ -54,5 +54,9 @@ public abstract class BaseCategoryEntity {
 
     public void deactivate() {
         this.isActive = false;
+    }
+
+    public boolean getIsActive() {
+        return this.isActive;
     }
 }

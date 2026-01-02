@@ -3,8 +3,10 @@ package org.example.onebyte.repository;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 import org.example.onebyte.entity.User;
+import org.example.onebyte.type.UserStatus;
 import org.springframework.data.jpa.repository.JpaRepository;
 
+import java.util.List;
 import java.util.Optional;
 
 public interface UserRepository extends JpaRepository<User,Long> {
@@ -19,5 +21,8 @@ public interface UserRepository extends JpaRepository<User,Long> {
 
     boolean existsByNicknameAndIdNot(String nickname, Long id);
 
+    // 관리자 - 회원 조회
+    // status : 전체, 활성화, 탈퇴, 차단 멤버 조회
+    List<User> findAllByStatusOrderByIdDesc(UserStatus status);
 
 }

@@ -7,24 +7,28 @@ import java.time.LocalDateTime;
 
 public record BoardResponse(
         Long id,
-        Category category,
+        Long categoryId,
+        String categoryName,
         String title,
         String content,
         Long userId,
+        String userNickname,
         Long viewCount,
-        LocalDateTime createdAt,
-        LocalDateTime updatedAt
+        Long commentCount,
+        LocalDateTime createdAt
 ) {
     public static BoardResponse from(Board board) {
         return new BoardResponse(
                 board.getId(),
-                board.getCategory(),
+                board.getCategory().getId(),
+                board.getCategory().getName(),
                 board.getTitle(),
                 board.getContent(),
                 board.getUserId(),
+                board.getUserNickname(),
                 board.getViewCount(),
-                board.getCreatedAt(),
-                board.getUpdatedAt()
+                board.getCommentCount(),
+                board.getCreatedAt()
         );
     }
 }

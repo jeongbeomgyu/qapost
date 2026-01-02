@@ -10,4 +10,7 @@ import lombok.Getter;
 public class UpdateInfoRequest {
     private String name;
     private String nickname;
+    private String bio;
+    private String websiteUrl;
+
 }

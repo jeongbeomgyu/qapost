@@ -32,38 +32,60 @@ public class MyPageServiceImpl implements MyPageService {
     private final BoardRepository boardRepository;
     private final CommentRepository commentRepository;
 
-    //정보조회
+    // 정보조회 (+ postCount/commentCount/level 계산해서 내려줌)
     @Override
     @Transactional(readOnly = true)
     public MyPageInfoResponse getInfo(Long userId) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new AuthenticationFailedException("유저 없음"));
-        return MyPageInfoResponse.from(user);
+
+        long postCount = boardRepository.countByUserId(userId);
+        long commentCount = commentRepository.countByUserId(userId);
+
+        int level = calculateLevel(postCount, commentCount);
+
+
+        return MyPageInfoResponse.from(user, postCount, commentCount, level);
     }
 
-    //이름, 닉네임변경
+
+    // 이름, 닉네임, 자기소개, 웹사이트 변경
     @Override
-    public void updateInfo(Long userId, UpdateInfoRequest request){
-        User user = userRepository.findById(userId).orElseThrow(()->new AuthenticationFailedException("유저가 존재하지 않습니다."));
+    public void updateInfo(Long userId, UpdateInfoRequest request) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new AuthenticationFailedException("유저가 존재하지 않습니다."));
 
-        // trim : 앞뒤공백날림
-        String newName = (request.getName() == null || request.getName().isBlank()) ? user.getName() : request.getName().trim();
-        String newNickname = (request.getNickname() == null || request.getNickname().isBlank()) ? user.getNickname() : request.getNickname().trim();
+        String newName = (request.getName() == null || request.getName().isBlank())
+                ? user.getName()
+                : request.getName().trim();
 
-        //닉네임만 중복체크
-        if (!newNickname.equals(user.getNickname())&& userRepository.existsByNickname(newNickname)) {
+        String newNickname = (request.getNickname() == null || request.getNickname().isBlank())
+                ? user.getNickname()
+                : request.getNickname().trim();
+
+        if (!newNickname.equals(user.getNickname()) && userRepository.existsByNickname(newNickname)) {
             throw DuplicateResourceException.userNickname(newNickname);
         }
 
-        // 변경 없으면 종료
-        if (newName.equals(user.getName()) && newNickname.equals(user.getNickname())) {
-            return;
-        }
+        String newBio = (request.getBio() == null || request.getBio().isBlank())
+                ? user.getBio()
+                : request.getBio().trim();
 
-        user.changeInfo(newName, newNickname);
+        String newWebsiteUrl = (request.getWebsiteUrl() == null || request.getWebsiteUrl().isBlank())
+                ? user.getWebsiteUrl()
+                : request.getWebsiteUrl().trim();
+
+        boolean sameName = newName.equals(user.getName());
+        boolean sameNickname = newNickname.equals(user.getNickname());
+        boolean sameBio = (newBio == null ? user.getBio() == null : newBio.equals(user.getBio()));
+        boolean sameWebsite = (newWebsiteUrl == null ? user.getWebsiteUrl() == null : newWebsiteUrl.equals(user.getWebsiteUrl()));
+
+        if (sameName && sameNickname && sameBio && sameWebsite) return;
+
+        user.changeInfo(newName, newNickname, newBio, newWebsiteUrl);
     }
 
-    //비밀번호 변경
+    // 비밀번호 변경
     @Override
     public void updatePassword(Long userId, UpdatePasswordRequest req) {
 
@@ -82,21 +104,15 @@ public class MyPageServiceImpl implements MyPageService {
         user.changePasswordHash(newPasswordHash);
     }
 
-    //회원탈퇴
-    // MyPageServiceImpl.java
+    // 회원탈퇴
     @Override
     public void withdraw(Long userId) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new AuthenticationFailedException("사용자가 존재하지 않습니다."));
 
-        if (UserStatus.WITHDRAWN_BY_USER.equals(user.getStatus())) {
-            return; // 이미 탈퇴한 유저면 그냥 조용히 끝내도 됨(정책)
-        }
+        if (UserStatus.WITHDRAWN_BY_USER.equals(user.getStatus())) return;
 
-        //isActive = false
         user.withdrawByUser();
-
-        //refresh토큰 함께 압수
         refreshTokenRepository.deleteByUserId(userId);
     }
 
@@ -108,10 +124,23 @@ public class MyPageServiceImpl implements MyPageService {
                 .getContent();
     }
 
-    // 특정 사용자가 작성한 댓글 조회
     @Override
+    @Transactional(readOnly = true)
     public List<CommentResponse> listMyComments(Long userId, Pageable pageable) {
-        return commentRepository.findMyComments(userId, pageable);
+        return commentRepository
+                .findMyComments(userId, pageable)
+                .getContent();   // 🔥 여기
     }
 
+    // 레벨 계산: 게시글*5 + 댓글 -> 1~5
+    private int calculateLevel(long postCount, long commentCount) {
+        long score = postCount * 5L + commentCount;
+
+        // 네가 원하는 기준으로 바꾸면 됨. (일단 깔끔하게 5단계)
+        if (score >= 300) return 5;
+        if (score >= 150) return 4;
+        if (score >= 70) return 3;
+        if (score >= 20) return 2;
+        return 1;
+    }
 }

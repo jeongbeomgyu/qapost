@@ -45,6 +45,13 @@ public class MyPageController {
     public ResponseEntity<MessageResponse> updateInfo(@RequestHeader("Authorization") String authorization, @RequestBody UpdateInfoRequest request) {
         Long userId = jwtTokenizer.getUserIdFromToken(authorization);
         myPageService.updateInfo(userId, request);
+
+        System.out.println("REQ name=" + request.getName()
+                + ", nick=" + request.getNickname()
+                + ", bio=" + request.getBio()
+                + ", websiteUrl=" + request.getWebsiteUrl());
+
+
         return ResponseEntity.ok(new MessageResponse("정보가 수정되었습니다."));
     }
 
@@ -92,9 +99,9 @@ public class MyPageController {
             @RequestParam(defaultValue = "20") int size
     ) {
         Long userId = jwtTokenizer.getUserIdFromToken(authorization);
-
         Pageable pageable = PageRequest.of(page, size);
+        var result = myPageService.listMyComments(userId, pageable);
+        System.out.println("[mypage/comments] userId = " + userId + ", size = " + result.size());
         return ResponseEntity.ok(myPageService.listMyComments(userId, pageable));
     }
-
 }

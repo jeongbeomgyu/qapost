@@ -42,6 +42,16 @@ public class User {
     @Column(name = "ban_reason")
     private String banReason;
 
+    // 바이오그래피, 웹사이트 url 추가
+    @Column(name = "bio", length = 500)
+    private String bio;
+
+    @Column(name = "website_url", length = 255)
+    private String websiteUrl;
+
+    @Column(nullable = false)
+    @Builder.Default
+    private int level = 1;
 
     //CREATED_AT, UPDATE_AT 자동 업데이트
     @Column(name = "created_at", insertable = false, updatable = false)
@@ -79,15 +89,19 @@ public class User {
                 .passwordHash(passwordHash)
                 .role(Role.ROLE_USER)
                 .status(UserStatus.ACTIVE)
+                .level(1)
                 .banReason(null)
                 .build();
     }
 
 
+
     // 도메인 메서드
-    public void changeInfo(String name, String nickname) {
+    public void changeInfo(String name, String nickname, String bio, String websiteUrl) {
         this.name = name;
         this.nickname = nickname;
+        this.bio = bio;
+        this.websiteUrl = websiteUrl;
     }
 
     public void changePasswordHash(String passwordHash) {
@@ -118,7 +132,7 @@ public class User {
     }
 
     // 사용자 재가입
-    public void reactivate(String email, String nicknamem,String passwordHash) {
+    public void reactivate(String email, String nicknamem, String passwordHash) {
         this.status = UserStatus.ACTIVE;
         this.email = email;
         this.nickname = nicknamem;

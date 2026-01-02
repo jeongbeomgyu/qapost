@@ -31,4 +31,5 @@ public class CategoryGroup extends BaseCategoryEntity {
                 .isActive(true)
                 .build();
     }
+
 }
