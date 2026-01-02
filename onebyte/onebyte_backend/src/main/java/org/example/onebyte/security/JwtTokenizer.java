@@ -95,7 +95,7 @@ public class JwtTokenizer {
 
     // 토큰에서 id 값만 꺼내는 메소드
     public Long getUserIdFromToken(String token) {
-        if (token == null || !token.startsWith("Bearer")) {
+        if (token == null || !token.startsWith("Bearer ")) {
             throw new IllegalArgumentException("잘못된 Token 입니다.");
         }
 
