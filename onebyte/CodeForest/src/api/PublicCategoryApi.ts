@@ -1,4 +1,5 @@
-const API_BASE = "http://localhost:8080";
+// src/api/PublicCategoryApi.ts
+import { API_BASE } from "./http"; // ✅ http.ts에서 export한 API_BASE 재사용 (중복 제거)
 
 export type PublicCategoryTree = {
   groupId: number;
@@ -16,5 +17,7 @@ export async function fetchPublicCategoryTree(): Promise<PublicCategoryTree[]> {
   if (!res.ok) {
     throw new Error(`fetchPublicCategoryTree failed: ${res.status}`);
   }
-  return res.json();
+
+  const data = await res.json();
+  return Array.isArray(data) ? data : [];
 }

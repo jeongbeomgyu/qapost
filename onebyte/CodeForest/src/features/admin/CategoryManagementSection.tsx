@@ -799,7 +799,16 @@ export function CategoryManagementSection() {
                   {isDelete ? "삭제할까요?" : willActivate ? "활성화할까요?" : "비활성화할까요?"}
                 </p>
 
-                {isDelete && <p className="text-xs text-red-600 mt-2">삭제 후 복구가 불가능합니다.</p>}
+                {isDelete && (
+                  <div className="mt-2 space-y-1">
+                    <p className="text-xs text-red-600">삭제 후 복구가 불가능합니다.</p>
+                    {"parentId" in confirmModal.item ? (
+                      <p className="text-xs text-red-600">
+                        이 소카테고리에 속한 게시글/댓글도 모두 삭제됩니다.
+                      </p>
+                    ) : null}
+                  </div>
+                )}
               </div>
             </div>
 

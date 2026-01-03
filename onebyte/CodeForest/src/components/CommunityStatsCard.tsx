@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-
-const API_BASE = "http://localhost:8080";
+import { http } from "../api/http"; // ✅ 토큰 재발급 포함된 http.ts 사용
 
 export type CommunityStats = {
   totalUsers: number;
@@ -45,15 +44,13 @@ export function CommunityStatsCard() {
     try {
       setStatus("loading");
 
-      const res = await fetch(`${API_BASE}/api/community`, { method: "GET" });
-      if (!res.ok) throw new Error(`fetchCommunity failed: ${res.status}`);
+      const data = await http<Partial<CommunityStats>>("/api/community", {
+        method: "GET",
+      });
 
-      const data = (await res.json()) as Partial<CommunityStats>;
-
-      // ✅ 필드 누락/undefined 방지: 기본값 0으로 채움
       const normalized: CommunityStats = {
         ...EMPTY_STATS,
-        ...data,
+        ...(data ?? {}),
       };
 
       setStats(normalized);
@@ -87,10 +84,7 @@ export function CommunityStatsCard() {
           <div className="text-muted-foreground">현황을 불러오지 못했습니다</div>
           <button
             type="button"
-            onClick={() => {
-              console.log("retry clicked");
-              void load();
-            }}
+            onClick={() => void load()}
             className="inline-flex items-center justify-center rounded-md border border-border bg-white px-3 py-2 text-sm hover:bg-secondary/20"
           >
             재시도

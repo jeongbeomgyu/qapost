@@ -11,6 +11,7 @@ import org.example.onebyte.entity.Category;
 import org.example.onebyte.entity.CategoryGroup;
 import org.example.onebyte.exception.ConflictException;
 import org.example.onebyte.repository.BoardRepository;
+import org.example.onebyte.repository.CommentRepository;
 import org.example.onebyte.repository.category.CategoryGroupRepository;
 import org.example.onebyte.repository.category.CategoryRepository;
 import org.springframework.stereotype.Service;
@@ -26,6 +27,7 @@ public class AdminCategoryImpl implements AdminCategoryService {
     private final CategoryGroupRepository groupRepository;
     private final CategoryRepository categoryRepository;
     private final BoardRepository boardRepository;
+    private final CommentRepository commentRepository;
 
     // ===== 트리 조회 =====
     @Override
@@ -149,9 +151,18 @@ public class AdminCategoryImpl implements AdminCategoryService {
 
     @Override
     public void deleteCategory(Long categoryId) {
-        if (boardRepository.existsByCategoryId(categoryId)) {
-            throw new ConflictException("해당 소분류에 게시글이 존재하여 삭제할 수 없습니다.");
-        }
+        // ✅ 정책 변경: 소카테고리 삭제 시, 하위 게시글/댓글까지 전부 하드 삭제한다.
+        // 트랜잭션으로 묶어서 중간 실패 시 전체 롤백되도록 함.
+
+        // 카테고리 존재 확인(없으면 기존 스타일대로 IllegalArgumentException)
+        categoryRepository.findById(categoryId)
+                .orElseThrow(() -> new IllegalArgumentException("소분류를 찾을 수 없습니다."));
+
+        // 1) 댓글 삭제 (FK: comments.board_id -> boards.id)
+        commentRepository.deleteAllByCategoryId(categoryId);
+        // 2) 게시글 삭제 (FK: boards.category_id -> categories.id)
+        boardRepository.deleteAllByCategoryId(categoryId);
+        // 3) 카테고리 삭제
         categoryRepository.deleteById(categoryId);
     }
 

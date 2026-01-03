@@ -5,6 +5,7 @@ import org.example.onebyte.entity.Comment;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -37,6 +38,20 @@ public interface CommentRepository extends JpaRepository<Comment, Long> {
     Page<CommentResponse> findMyComments(@Param("userId") Long userId, Pageable pageable);
 
 
+
+    /**
+     * ✅ 소카테고리 삭제 정책 변경:
+     * - 해당 소카테고리에 속한 게시글들의 댓글을 먼저 전부 삭제한다.
+     * - bulk delete 이므로 호출부(@Transactional)에서 트랜잭션 보장 필요
+     */
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("""
+        delete from Comment c
+        where c.board.id in (
+            select b.id from Board b where b.category.id = :categoryId
+        )
+        """)
+    int deleteAllByCategoryId(@Param("categoryId") Long categoryId);
 
     void deleteByUserId(Long userId);
 

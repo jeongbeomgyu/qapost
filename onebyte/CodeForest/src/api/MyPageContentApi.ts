@@ -1,8 +1,5 @@
 // src/api/MyPageContentApi.ts
-import { toast } from "sonner";
 import { http } from "./http";
-
-const API_BASE = "http://localhost:8080"; // (다른 파일들이랑 통일용, 실제 호출은 http가 API_BASE 사용)
 
 export type MyBoard = {
   id: number;

@@ -31,19 +31,36 @@ function setChatAccessToken(token: string) {
   saveAccessToken(token);
 }
 
+/**
+ * ✅ 핵심: Authorization 우선순위
+ * - extra(init.headers)에 Authorization이 있어도 무조건 최신 토큰으로 덮어쓴다.
+ */
 function authHeaders(extra: HeadersInit = {}): HeadersInit {
   const token = getChatAccessToken();
-  return token ? { Authorization: `Bearer ${token}`, ...extra } : { ...extra };
+  if (!token) return { ...extra };
+  return { ...extra, Authorization: `Bearer ${token}` };
 }
 
+/**
+ * ✅ 에러 메시지 읽기: 빈 바디/텍스트/JSON 전부 대응
+ */
 async function readErrorMessage(res: Response): Promise<string> {
   try {
-    const data = await res.json();
-    if (typeof data?.message === "string") return data.message;
+    const text = await res.text();
+    if (!text) return `${res.status} ${res.statusText}`.trim();
+
+    // JSON이면 message 우선
+    try {
+      const data = JSON.parse(text);
+      if (typeof (data as any)?.message === "string") return (data as any).message;
+    } catch {
+      // text가 JSON이 아니면 그대로 사용
+    }
+
+    return text;
   } catch {
-    // ignore
+    return `${res.status} ${res.statusText}`.trim();
   }
-  return `${res.status} ${res.statusText}`.trim();
 }
 
 /**
@@ -52,28 +69,22 @@ async function readErrorMessage(res: Response): Promise<string> {
 let redirectingToLogin = false;
 
 function handleAuthFailure(status: number) {
-  // 401/403만 처리
   if (status !== 401 && status !== 403) return;
 
-  // ✅ 토큰 정리(만료 토큰 남아있으면 계속 401 터짐)
   clearAccessToken();
 
-  // ✅ 이미 로그인 페이지면 여기서 끝 (무한 리다이렉트 방지)
   if (window.location.pathname === "/login") {
-    // toast는 너무 시끄러우면 빼도 됨
     if (status === 401) toast.error("세션이 만료되었습니다. 다시 로그인해주세요.");
     if (status === 403) toast.error("권한이 없습니다.");
     return;
   }
 
-  // ✅ 여러 요청이 동시에 401 나도 login 이동은 딱 1번만
   if (redirectingToLogin) return;
   redirectingToLogin = true;
 
   if (status === 401) toast.error("세션이 만료되었습니다. 다시 로그인해주세요.");
   if (status === 403) toast.error("권한이 없습니다.");
 
-  // ✅ 원래 가려던 경로 기억해서 login 후 복귀
   const next = encodeURIComponent(window.location.pathname + window.location.search);
   window.location.assign(`/login?redirect=${next}`);
 }
@@ -91,7 +102,7 @@ async function reissueAccessToken(): Promise<string> {
   refreshPromise = (async () => {
     const res = await fetch(`${API_BASE}/api/users/reissue`, {
       method: "POST",
-      credentials: "include", // ✅ refreshToken 쿠키 필요
+      credentials: "include",
     });
 
     if (!res.ok) {
@@ -99,8 +110,11 @@ async function reissueAccessToken(): Promise<string> {
       throw new HttpError(msg || "reissue failed", res.status);
     }
 
-    const data = (await res.json()) as { accessToken?: string; token?: string };
-    const newToken = normalizeToken(data.accessToken ?? data.token ?? null);
+    // ✅ reissue도 body가 비어있을 가능성 대비
+    const text = await res.text();
+    const data = text ? (JSON.parse(text) as { accessToken?: string; token?: string }) : {};
+
+    const newToken = normalizeToken((data as any).accessToken ?? (data as any).token ?? null);
 
     if (!newToken) {
       throw new HttpError("reissue 응답에 accessToken 없음", 500);
@@ -131,6 +145,10 @@ async function doFetch<T>(
     ...(init.headers as Record<string, string> | undefined),
   };
 
+  // ✅ 혹시 각 API에서 Authorization을 넣어도 무시 (항상 최신 토큰으로)
+  delete (headers as any).Authorization;
+  delete (headers as any).authorization;
+
   if (init.json !== undefined) headers["Content-Type"] = "application/json";
 
   const res = await fetch(`${API_BASE}${path}`, {
@@ -146,7 +164,6 @@ async function doFetch<T>(
       await reissueAccessToken();
       return doFetch<T>(path, init, false);
     } catch (e) {
-      // ✅ reissue 실패(=refresh 만료/없음) → 로그인으로 1번만 보냄
       handleAuthFailure(401);
       throw e;
     }
@@ -163,9 +180,19 @@ async function doFetch<T>(
     throw new HttpError(msg, res.status);
   }
 
+  // ✅ 204는 바디 없음
   if (res.status === 204) return undefined as T;
 
-  return res.json();
+  // ✅ 200/201인데 body 비어있으면 json 파싱하지 말고 끝내
+  const text = await res.text();
+  if (!text) return undefined as T;
+
+  // ✅ JSON이면 파싱해서 반환, 아니면 text 그대로 반환
+  try {
+    return JSON.parse(text) as T;
+  } catch {
+    return text as unknown as T;
+  }
 }
 
 /**

@@ -15,6 +15,13 @@ export class ApiError extends Error {
   }
 }
 
+function normalizeToken(raw: string | null | undefined): string | null {
+  if (!raw) return null;
+  const v = String(raw).trim();
+  if (!v || v === "null" || v === "undefined") return null;
+  return v;
+}
+
 export type LoginRequest = {
   email: string;
   password: string;
@@ -23,24 +30,17 @@ export type LoginRequest = {
 export type LoginResponse = {
   accessToken?: string;
   token?: string;
-  refreshToken?: string;
+  refreshToken?: string; // (보통 쿠키라 프론트에선 안 씀)
 };
 
-/** ✅ 서버 응답에서 accessToken을 최대한 뽑아내는 함수 */
 function pickAccessToken(data: LoginResponse): string | null {
-  const raw = (data?.accessToken ?? data?.token ?? null) as string | null;
-  if (!raw) return null;
-  const v = raw.trim();
-  if (!v || v === "null" || v === "undefined") return null;
-  return v;
+  return normalizeToken(data?.accessToken ?? data?.token ?? null);
 }
 
 export async function loginApi(payload: LoginRequest): Promise<LoginResponse> {
   const res = await fetch(`${API_BASE}/api/users/login`, {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
+    headers: { "Content-Type": "application/json" },
     credentials: "include", // ✅ refreshToken 쿠키 받기
     body: JSON.stringify(payload),
   });
@@ -56,15 +56,11 @@ export async function loginApi(payload: LoginRequest): Promise<LoginResponse> {
 
   const data = (await res.json()) as LoginResponse;
 
-  // ✅ 여기! 로그인 성공 시 accessToken 저장
   const accessToken = pickAccessToken(data);
-  if (!accessToken) {
-    // 백엔드가 accessToken을 안 주면 프론트는 인증 불가능이라 에러로 처리
-    throw new ApiError("login response에 accessToken이 없습니다.", 500);
-  }
+  if (!accessToken) throw new ApiError("login response에 accessToken이 없습니다.", 500);
+
   saveAccessToken(accessToken);
 
-  // ✅ 정규화: accessToken 필드로 맞춰서 반환(나머지 코드가 쓰기 편함)
   return { ...data, accessToken };
 }
 
@@ -83,9 +79,7 @@ export type RegisterResponse = {
 export async function registerApi(payload: RegisterRequest): Promise<RegisterResponse> {
   const res = await fetch(`${API_BASE}/api/users/register`, {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
+    headers: { "Content-Type": "application/json" },
     credentials: "include",
     body: JSON.stringify(payload),
   });
@@ -107,32 +101,26 @@ export async function registerApi(payload: RegisterRequest): Promise<RegisterRes
 }
 
 export function saveAccessToken(token: string) {
-  const trimmed = token?.trim?.() ?? "";
-  if (!trimmed) {
+  const v = normalizeToken(token);
+  if (!v) {
     localStorage.removeItem(TOKEN_STORAGE_KEY);
     return;
   }
-  localStorage.setItem(TOKEN_STORAGE_KEY, trimmed);
+
+  localStorage.setItem(TOKEN_STORAGE_KEY, v);
 
   // legacy 키 정리(있으면 제거해서 혼동 방지)
   for (const k of LEGACY_TOKEN_KEYS) localStorage.removeItem(k);
 }
 
 export function getAccessToken(): string | null {
-  const normalize = (raw: string | null): string | null => {
-    if (!raw) return null;
-    const v = raw.trim();
-    if (!v || v === "null" || v === "undefined") return null;
-    return v;
-  };
-
   // 1) primary key
-  const primary = normalize(localStorage.getItem(TOKEN_STORAGE_KEY));
+  const primary = normalizeToken(localStorage.getItem(TOKEN_STORAGE_KEY));
   if (primary) return primary;
 
   // 2) legacy keys (있으면 primary로 마이그레이션)
   for (const k of LEGACY_TOKEN_KEYS) {
-    const legacy = normalize(localStorage.getItem(k));
+    const legacy = normalizeToken(localStorage.getItem(k));
     if (legacy) {
       localStorage.setItem(TOKEN_STORAGE_KEY, legacy);
       localStorage.removeItem(k);

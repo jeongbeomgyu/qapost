@@ -174,6 +174,16 @@ public interface BoardRepository extends JpaRepository<Board, Long> {
     // 삭제하고자 하는 카테고리에 글이 하나라도 있으면 삭제불가
     boolean existsByCategoryId(Long categoryId);
 
+    /**
+     * ✅ 소카테고리 삭제 정책 변경:
+     * - 해당 소카테고리에 속한 게시글을 전부 하드 삭제한다.
+     * - 주의: bulk delete 이므로, 연관 엔티티는 별도 정리(또는 DB cascade) 필요
+     *   -> 본 프로젝트는 CommentRepository.deleteAllByCategoryId()로 댓글 먼저 삭제 후 호출한다.
+     */
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("delete from Board b where b.category.id = :categoryId")
+    int deleteAllByCategoryId(@Param("categoryId") Long categoryId);
+
     @Query("""
            select (count(b) > 0)
            from Board b
