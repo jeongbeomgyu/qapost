@@ -33,12 +33,10 @@ public class SecurityConfig {
         return new BCryptPasswordEncoder();
     }
 
-    // CORS 설정 (프론트 주소에 맞춰)
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration config = new CorsConfiguration();
 
-        // 프론트 주소 (필요하면 추가)
         config.setAllowedOrigins(List.of(
                 "http://localhost:3000",
                 "http://127.0.0.1:3000"
@@ -55,7 +53,6 @@ public class SecurityConfig {
 
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
-
         JwtAuthenticationFilter jwtFilter = new JwtAuthenticationFilter(jwtTokenizer);
 
         http
@@ -65,30 +62,31 @@ public class SecurityConfig {
                 .exceptionHandling(ex -> ex.authenticationEntryPoint(authenticationEntryPoint))
 
                 .authorizeHttpRequests(auth -> auth
-                        // Preflight
+                        // preflight
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
 
-                        // Auth (비로그인 허용)
+                        // auth endpoints
                         .requestMatchers(
                                 "/",
                                 "/error",
                                 "/api/users/register",
                                 "/api/users/login",
-                                "/api/users/reissue",
-                                "/api/community"
+                                "/api/users/reissue"
                         ).permitAll()
 
-                        // Public Read
+                        // ✅ public stats
+                        .requestMatchers(HttpMethod.GET, "/api/community").permitAll()
+
+                        // public read
                         .requestMatchers(HttpMethod.GET, "/api/categories/**").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/boards/**").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/comments/**").permitAll()
-                        // 아래가 실제로 존재하면 유지, 아니면 지워도 됨
                         .requestMatchers(HttpMethod.GET, "/api/boards/*/comments/**").permitAll()
 
-                        // Admin only
+                        // admin only
                         .requestMatchers("/api/admin/**").hasRole("ADMIN")
 
-                        // 나머지 전부 로그인 필요
+                        // others need auth
                         .anyRequest().authenticated()
                 )
 

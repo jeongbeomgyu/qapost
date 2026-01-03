@@ -51,6 +51,10 @@ dependencies {
     //LocalDateTime -> JSON문자열 변환 추가
     implementation 'com.fasterxml.jackson.datatype:jackson-datatype-jsr310'
 
+    // WebSocket 추가
+    implementation 'org.springframework.boot:spring-boot-starter-websocket'
+
+
 }
 
 tasks.named('test') {
