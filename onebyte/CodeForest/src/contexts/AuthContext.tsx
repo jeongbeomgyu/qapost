@@ -4,10 +4,13 @@ import { clearAccessToken, getAccessToken, saveAccessToken } from "../api/AuthAp
 
 type Role = "ROLE_ADMIN" | "ROLE_USER" | null;
 
+type Me = { id: number } | null;
+
 type AuthState = {
   token: string | null;
   isLoggedIn: boolean;
   role: Role;
+  me: Me;
   login: (token: string) => void;
   logout: () => void;
 };
@@ -75,6 +78,20 @@ function extractRole(payload: any): Role {
   return null;
 }
 
+function extractUserId(payload: any): number | null {
+  if (!payload) return null;
+
+  const candidates = [payload.userId, payload.id, payload.memberId, payload.sub];
+  for (const v of candidates) {
+    if (typeof v === "number" && Number.isFinite(v)) return v;
+    if (typeof v === "string") {
+      // sub가 email 같은 문자열인 JWT도 있어서 숫자 문자열만 허용
+      if (/^\d+$/.test(v)) return Number(v);
+    }
+  }
+  return null;
+}
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const initialToken = getAccessToken();
   const [token, setToken] = useState<string | null>(initialToken);
@@ -82,28 +99,40 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (!initialToken) return null;
     return extractRole(parseJwtPayload(initialToken));
   });
+  const [me, setMe] = useState<Me>(() => {
+    if (!initialToken) return null;
+    const id = extractUserId(parseJwtPayload(initialToken));
+    return id != null ? { id } : null;
+  });
 
   // ✅ 토큰이 바뀌는 즉시 role 갱신 (새로고침 없이 바로 반영)
   useEffect(() => {
     if (!token) {
       setRole(null);
+      setMe(null);
       return;
     }
     const payload = parseJwtPayload(token);
     setRole(extractRole(payload));
+    const id = extractUserId(payload);
+    setMe(id != null ? { id } : null);
   }, [token]);
 
   const login = (newToken: string) => {
     saveAccessToken(newToken);
     // ✅ token/role을 같은 tick에서 같이 세팅 -> 로그인 직후 즉시 Header 반영
     setToken(newToken);
-    setRole(extractRole(parseJwtPayload(newToken)));
+    const payload = parseJwtPayload(newToken);
+    setRole(extractRole(payload));
+    const id = extractUserId(payload);
+    setMe(id != null ? { id } : null);
   };
 
   const logout = () => {
     clearAccessToken();
     setToken(null);
     setRole(null);
+    setMe(null);
   };
 
   const value = useMemo(
@@ -111,10 +140,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       token,
       isLoggedIn: !!token,
       role,
+      me,
       login,
       logout,
     }),
-    [token, role]
+    [token, role, me]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

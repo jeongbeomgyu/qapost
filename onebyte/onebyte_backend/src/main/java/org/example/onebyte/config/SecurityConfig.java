@@ -74,7 +74,8 @@ public class SecurityConfig {
                                 "/error",
                                 "/api/users/register",
                                 "/api/users/login",
-                                "/api/users/reissue"
+                                "/api/users/reissue",
+                                "/api/community"
                         ).permitAll()
 
                         // Public Read

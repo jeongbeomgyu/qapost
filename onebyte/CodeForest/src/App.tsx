@@ -7,6 +7,7 @@ import { HomePage } from "./pages/HomePage";
 import { PostDetailPage } from "./pages/PostDetailPage";
 import { CategoryPage } from "./pages/CategoryPage";
 import { WritePostPage } from "./pages/WritePostPage";
+import { PostWritePage } from "./pages/PostWrite";
 import { MyProfilePage } from "./pages/mypage/MyProfilePage";
 import { MyPostsPage } from "./pages/mypage/MyPostsPage";
 import { MyCommentsPage } from "./pages/mypage/MyCommentsPage";
@@ -59,7 +60,11 @@ export default function App() {
           <Route path="/post/:id" element={<PostDetailPage />} />
           {/* ✅ 소카테고리(=subCategoryId) 게시글 목록 */}
           <Route path="/category/:id" element={<CategoryPage />} />
-          <Route path="/write" element={<WritePostPage />} />
+          {/* ✅ 글쓰기/수정 */}
+          <Route path="/post/write" element={<PostWritePage />} />
+          <Route path="/post/:id/edit" element={<PostWritePage />} />
+          {/* ✅ 구버전 링크 호환 */}
+          <Route path="/write" element={<Navigate to="/post/write" replace />} />
 
           <Route path="/mypage" element={<Navigate to="/mypage/profile" replace />} />
           <Route path="/mypage/profile" element={<MyProfilePage />} />

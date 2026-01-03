@@ -40,11 +40,14 @@ public class BoardServiceImpl implements BoardService {
 
     @Override
     public BoardResponse findByBoardId(Long boardId) {
+        boardRepository.increaseViewCount(boardId);
+
         Board board = boardRepository.findById(boardId)
                 .orElseThrow(() -> new IllegalArgumentException("게시글이 존재하지 않습니다."));
 
         return BoardResponse.from(board);
     }
+
 
     // 카테고리 별 게시글 조회
     public Page<BoardResponse> getBoardsByCategory(Long categoryId, Pageable pageable){
@@ -88,16 +91,23 @@ public class BoardServiceImpl implements BoardService {
         Category category = categoryRepository.findById(request.categoryId())
                 .orElseThrow(() -> new IllegalArgumentException("카테고리를 찾을 수 없습니다."));
 
+        if (user.getNickname() == null || user.getNickname().isBlank()) {
+            throw new IllegalStateException("유저 닉네임이 비어있습니다. userId=" + userId);
+        }
+
         Board board = Board.builder()
                 .category(category)
                 .title(request.title())
                 .content(request.content())
                 .userId(user.getId())
+                .userNickname(user.getNickname())
                 .viewCount(0L)
+                .commentCount(0L)
                 .build();
 
         return BoardResponse.from(boardRepository.save(board));
     }
+
 
     @Override
     public BoardResponse update(Long boardId, Long userId, BoardRequest request) {
@@ -132,5 +142,6 @@ public class BoardServiceImpl implements BoardService {
 
         boardRepository.delete(board);
     }
+
 
 }

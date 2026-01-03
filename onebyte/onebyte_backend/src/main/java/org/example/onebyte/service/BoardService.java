@@ -25,4 +25,6 @@ public interface BoardService {
     BoardResponse update(Long boardId, Long userId, BoardRequest request);
 
     void delete(Long boardId, Long userId);
+
+
 }

@@ -47,13 +47,14 @@ public class GlobalExceptionHandler {
     }
 
     //DB유니크 제약 위반 (409 : 서버충돌)
-    //중복 2치 ㅊ[ㅋ,
+    //중복 2차 체크
     @ExceptionHandler(DataIntegrityViolationException.class)
     public ResponseEntity<ErrorResponse> handleDataIntegrity(
             DataIntegrityViolationException e,
             HttpServletRequest request
     ) {
         log.warn("DB constraint violation: {}", e.getMessage());
+        log.warn("DB constraint violation: {}", e.getMostSpecificCause().getMessage());
 
         ErrorResponse body = ErrorResponse.builder()
                 .timestamp(LocalDateTime.now())

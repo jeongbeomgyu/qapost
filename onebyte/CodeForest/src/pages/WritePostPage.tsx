@@ -4,6 +4,8 @@ import { Header } from "../components/Header";
 import { toast } from "sonner";
 import { fetchPublicCategoryTree, type PublicCategoryTree } from "../api/PublicCategoryApi";
 import { createBoard } from "../api/BoardApi";
+import { ApiError } from "../api/AuthApi";
+import { RichTextEditor } from "../components/editor/RichTextEditor";
 
 export function WritePostPage() {
   const navigate = useNavigate();
@@ -15,7 +17,7 @@ export function WritePostPage() {
   const [subCategoryId, setSubCategoryId] = useState<number | null>(null);
 
   const [title, setTitle] = useState("");
-  const [content, setContent] = useState("");
+  const [content, setContent] = useState<string>("<p></p>");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const loadCategories = async () => {
@@ -52,9 +54,13 @@ export function WritePostPage() {
 
   const handleSubmit = async () => {
     const trimmedTitle = title.trim();
-    const trimmedContent = content.trim();
+    const trimmedContentText = content
+      .replace(/<br\s*\/?>/gi, "\n")
+      .replace(/<\/?[^>]+(>|$)/g, "")
+      .replace(/&nbsp;/g, " ")
+      .trim();
 
-    if (!mainCategoryId || !subCategoryId || !trimmedTitle || !trimmedContent) {
+    if (!mainCategoryId || !subCategoryId || !trimmedTitle || !trimmedContentText) {
       toast.error("모든 필드를 입력해주세요");
       return;
     }
@@ -63,40 +69,33 @@ export function WritePostPage() {
       setIsSubmitting(true);
       const res = await createBoard({
         title: trimmedTitle,
-        content: trimmedContent,
-        subCategoryId,
+        content, // ✅ TipTap HTML 저장
+        categoryId: subCategoryId,
       });
       toast.success("게시글이 등록되었습니다");
       if (res?.id) navigate(`/post/${res.id}`);
       else navigate("/");
     } catch (e: any) {
-      toast.error(e?.message ?? "게시글 등록 실패");
+      if (e instanceof ApiError) {
+        toast.error(e.message);
+      } else {
+        toast.error(e?.message ?? "게시글 등록 실패");
+      }
     } finally {
       setIsSubmitting(false);
     }
   };
 
   return (
-    <div className="min-h-screen flex flex-col bg-background">
+    <div className="min-h-screen flex flex-col bg-white">
       <Header />
-      
-      <div className="flex-1 max-w-[1200px] mx-auto px-8 py-16 w-full">
-        {/* Page Header */}
-        <div className="mb-8">
-          <h1 className="mb-2">게시글 작성</h1>
-          <p className="text-muted-foreground">
-            커뮤니티에 새로운 게시글을 작성해보세요
-          </p>
-        </div>
 
-        {/* Form */}
-        <div className="bg-white rounded-lg border border-border shadow-sm p-8 space-y-6">
-          {/* Category Selection */}
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-foreground mb-2">
-                대카테고리 <span className="text-red-500">*</span>
-              </label>
+      {/* Full-width editor layout */}
+      <div className="flex-1 w-full">
+        <div className="w-full px-6 py-8">
+          {/* Top bar: category + actions */}
+          <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
+            <div className="flex flex-wrap items-center gap-3">
               <select
                 value={mainCategoryId ?? ""}
                 onChange={(e) => {
@@ -104,32 +103,16 @@ export function WritePostPage() {
                   setMainCategoryId(v ? Number(v) : null);
                 }}
                 disabled={loadingCategories || !!categoriesError}
-                className="w-full px-4 py-2.5 border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 bg-white disabled:bg-secondary/30 disabled:cursor-not-allowed"
+                className="h-10 px-3 border border-border rounded-lg bg-white disabled:bg-secondary/30 disabled:cursor-not-allowed"
               >
-                <option value="">카테고리를 선택하세요</option>
+                <option value="">대카테고리</option>
                 {mainCategories.map((cat) => (
                   <option key={cat.groupId} value={cat.groupId}>
                     {cat.groupName}
                   </option>
                 ))}
               </select>
-              {loadingCategories && (
-                <div className="mt-2 text-xs text-muted-foreground">대카테고리 불러오는 중...</div>
-              )}
-              {categoriesError && (
-                <div className="mt-2 text-xs text-red-600">
-                  카테고리 로딩 실패: {categoriesError}{" "}
-                  <button type="button" onClick={loadCategories} className="underline">
-                    다시 시도
-                  </button>
-                </div>
-              )}
-            </div>
 
-            <div>
-              <label className="block text-sm font-medium text-foreground mb-2">
-                소카테고리 <span className="text-red-500">*</span>
-              </label>
               <select
                 value={subCategoryId ?? ""}
                 onChange={(e) => {
@@ -137,14 +120,14 @@ export function WritePostPage() {
                   setSubCategoryId(v ? Number(v) : null);
                 }}
                 disabled={!mainCategoryId || loadingCategories || !!categoriesError}
-                className="w-full px-4 py-2.5 border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 bg-white disabled:bg-secondary/30 disabled:cursor-not-allowed"
+                className="h-10 px-3 border border-border rounded-lg bg-white disabled:bg-secondary/30 disabled:cursor-not-allowed"
               >
                 <option value="">
-                  {!mainCategoryId ? "대카테고리를 먼저 선택하세요" : "소카테고리를 선택하세요"}
+                  {!mainCategoryId ? "소카테고리" : "소카테고리 선택"}
                 </option>
                 {mainCategoryId && subCategories.length === 0 && (
                   <option value="" disabled>
-                    소카테고리가 없습니다
+                    소카테고리 없음
                   </option>
                 )}
                 {subCategories.map((sub) => (
@@ -153,53 +136,54 @@ export function WritePostPage() {
                   </option>
                 ))}
               </select>
+
+              {loadingCategories && <span className="text-xs text-muted-foreground">카테고리 로딩중...</span>}
+              {categoriesError && (
+                <span className="text-xs text-red-600">
+                  카테고리 로딩 실패: {categoriesError}{" "}
+                  <button type="button" onClick={loadCategories} className="underline">
+                    다시 시도
+                  </button>
+                </span>
+              )}
+            </div>
+
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={() => navigate(-1)}
+                disabled={isSubmitting}
+                className="h-10 px-5 border border-border rounded-lg hover:bg-secondary/30 disabled:opacity-60 disabled:cursor-not-allowed"
+              >
+                취소
+              </button>
+              <button
+                type="button"
+                onClick={handleSubmit}
+                disabled={isSubmitting}
+                className="h-10 px-5 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-60 disabled:cursor-not-allowed"
+              >
+                {isSubmitting ? "등록 중..." : "등록"}
+              </button>
             </div>
           </div>
 
           {/* Title */}
-          <div>
-            <label className="block text-sm font-medium text-foreground mb-2">
-              제목 <span className="text-red-500">*</span>
-            </label>
+          <div className="pb-4 border-b border-border mb-6">
             <input
-              type="text"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
-              placeholder="게시글 제목을 입력하세요"
-              className="w-full px-4 py-2.5 border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20"
+              placeholder="제목을 입력하세요"
+              className="w-full text-3xl font-semibold outline-none border-0 placeholder:text-muted-foreground"
             />
           </div>
 
-          {/* Content */}
-          <div>
-            <label className="block text-sm font-medium text-foreground mb-2">
-              내용 <span className="text-red-500">*</span>
-            </label>
-            <textarea
-              value={content}
-              onChange={(e) => setContent(e.target.value)}
-              placeholder="게시글 내용을 입력하세요"
-              rows={15}
-              className="w-full px-4 py-3 border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 resize-none"
-            />
-          </div>
-
-          {/* Action Buttons */}
-          <div className="flex items-center justify-end gap-3 pt-6 border-t border-border">
-            <button
-              onClick={() => navigate(-1)}
-              className="px-6 py-2.5 border border-border bg-white rounded-lg hover:bg-secondary/30 transition-colors"
-            >
-              취소
-            </button>
-            <button
-              onClick={handleSubmit}
-              disabled={isSubmitting}
-              className="px-6 py-2.5 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors shadow-sm disabled:opacity-60 disabled:cursor-not-allowed"
-            >
-              {isSubmitting ? "등록 중..." : "등록"}
-            </button>
-          </div>
+          {/* Editor */}
+          <RichTextEditor
+            value={content}
+            onChange={setContent}
+            placeholder="내용을 입력하세요..."
+          />
         </div>
       </div>
     </div>

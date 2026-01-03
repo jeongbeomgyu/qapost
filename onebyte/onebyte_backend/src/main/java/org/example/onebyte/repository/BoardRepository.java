@@ -10,6 +10,8 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDateTime;
+
 public interface BoardRepository extends JpaRepository<Board, Long> {
 
     // 카테고리 삭제할 때, 삭제한 카테고리의 Id 를 강제로 교체 시킴
@@ -196,4 +198,13 @@ public interface BoardRepository extends JpaRepository<Board, Long> {
     int decreaseCommentCount(@Param("boardId") Long boardId);
 
     long countByUserId(Long userId);
+
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("update Board b set b.viewCount = b.viewCount + 1 where b.id = :boardId")
+    int increaseViewCount(@Param("boardId") Long boardId);
+
+
+    // 커뮤니티 현황 보드
+    long countByCreatedAtBetween(LocalDateTime start, LocalDateTime end);
+
 }

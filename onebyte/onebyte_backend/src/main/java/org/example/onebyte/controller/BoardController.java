@@ -81,7 +81,7 @@ public class BoardController {
     }
 
     // 게시물 수정 : 작성자만 (제목/내용/카테고리 변경 가능)
-    @PutMapping("/{boardId}")
+    @PatchMapping ("/{boardId}")
     public ResponseEntity<BoardResponse> update(
             @RequestHeader("Authorization") String authorization,
             @PathVariable Long boardId,

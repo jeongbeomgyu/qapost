@@ -19,7 +19,7 @@ export function PopularPosts({ posts }: PopularPostsProps) {
   const mostCommented = [...posts].sort((a, b) => (b.commentCount ?? 0) - (a.commentCount ?? 0)).slice(0, 5);
 
   return (
-    <aside className="w-[320px] space-y-6">
+    <div className="space-y-6">
       {/* Popular Posts */}
       <div className="bg-white rounded-lg border border-border p-6">
         <div className="flex items-center gap-2 mb-5">
@@ -91,25 +91,6 @@ export function PopularPosts({ posts }: PopularPostsProps) {
           ))}
         </div>
       </div>
-
-      {/* Community Stats */}
-      <div className="bg-gradient-to-br from-secondary/50 to-secondary/20 rounded-lg border border-border p-6">
-        <h4 className="mb-4 text-foreground">커뮤니티 현황</h4>
-        <div className="space-y-3">
-          <div className="flex justify-between items-center">
-            <span className="text-muted-foreground">전체 게시글</span>
-            <span className="text-primary">1,234</span>
-          </div>
-          <div className="flex justify-between items-center">
-            <span className="text-muted-foreground">활성 회원</span>
-            <span className="text-primary">892</span>
-          </div>
-          <div className="flex justify-between items-center">
-            <span className="text-muted-foreground">오늘 작성글</span>
-            <span className="text-primary">47</span>
-          </div>
-        </div>
-      </div>
-    </aside>
+    </div>
   );
 }

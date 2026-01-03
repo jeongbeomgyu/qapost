@@ -1,5 +1,5 @@
 import { toast } from "sonner";
-import { clearAccessToken, withAuthHeaders } from "./AuthApi";
+import { ApiError, clearAccessToken, withAuthHeaders } from "./AuthApi";
 
 const API_BASE = "http://localhost:8080";
 
@@ -15,7 +15,16 @@ async function assertOk(res: Response, action: string) {
     handleAuthFailure(res.status);
     throw new Error(`${action} unauthorized (${res.status})`);
   }
-  if (!res.ok) throw new Error(`${action} failed: ${res.status}`);
+  if (!res.ok) {
+    let msg = `${action} failed: ${res.status}`;
+    try {
+      const data = await res.json();
+      if (data?.message) msg = data.message;
+    } catch {
+      // ignore
+    }
+    throw new ApiError(msg, res.status);
+  }
 }
 
 export type BoardDetail = {
@@ -156,8 +165,8 @@ export async function createBoardComment(boardId: number, content: string): Prom
 export type CreateBoardRequest = {
   title: string;
   content: string;
-  // ✅ 이 프로젝트의 응답/필터링이 categoryId로 내려오므로, 생성도 categoryId로 매핑(= subCategoryId)
-  subCategoryId: number;
+  // ✅ 백엔드 DTO(BoardRequest)의 categoryId에 맞춰서만 보낸다
+  categoryId: number;
 };
 
 export type CreateBoardResponse = {
@@ -169,12 +178,10 @@ export async function createBoard(req: CreateBoardRequest): Promise<CreateBoardR
     method: "POST",
     headers: withAuthHeaders({ "Content-Type": "application/json" }),
     credentials: "include",
-    // 서버가 subCategoryId 또는 categoryId 중 무엇을 받는지 환경마다 달라서 둘 다 넣어 호환
     body: JSON.stringify({
       title: req.title,
       content: req.content,
-      subCategoryId: req.subCategoryId,
-      categoryId: req.subCategoryId,
+      categoryId: req.categoryId,
     }),
   });
   await assertOk(res, "createBoard");
@@ -184,4 +191,93 @@ export async function createBoard(req: CreateBoardRequest): Promise<CreateBoardR
   return { id };
 }
 
+export type UpdateBoardRequest = {
+  title: string;
+  content: string;
+  categoryId: number;
+};
 
+export async function updateBoard(boardId: number, req: UpdateBoardRequest): Promise<BoardDetail> {
+  const res = await fetch(`${API_BASE}/api/boards/${boardId}`, {
+    method: "PATCH",
+    headers: withAuthHeaders({ "Content-Type": "application/json" }),
+    credentials: "include",
+    body: JSON.stringify({
+      title: req.title,
+      content: req.content,
+      categoryId: req.categoryId,
+    }),
+  });
+  await assertOk(res, "updateBoard");
+  return res.json();
+}
+
+// =======================
+// ✅ 게시글/댓글 수정·삭제 API (복붙)
+// =======================
+
+export async function deleteBoard(boardId: number): Promise<void> {
+    const res = await fetch(`${API_BASE}/api/boards/${boardId}`, {
+      method: "DELETE",
+      headers: withAuthHeaders({ "Content-Type": "application/json" }),
+      credentials: "include",
+    });
+    await assertOk(res, "deleteBoard");
+    // 백엔드가 body를 안 줄 수도 있어서 그냥 종료
+  }
+  
+export async function deleteBoardComment(commentId: number, boardId?: number): Promise<void> {
+  // 1) 우선 /api/comments/{id} 시도 (mypage에서도 이 패턴을 사용중)
+  let res = await fetch(`${API_BASE}/api/comments/${commentId}`, {
+    method: "DELETE",
+    headers: withAuthHeaders({ "Content-Type": "application/json" }),
+    credentials: "include",
+  });
+  // 2) 백엔드가 board-scope 구조면 fallback
+  if (res.status === 404 && typeof boardId === "number") {
+    res = await fetch(`${API_BASE}/api/boards/${boardId}/comments/${commentId}`, {
+      method: "DELETE",
+      headers: withAuthHeaders({ "Content-Type": "application/json" }),
+      credentials: "include",
+    });
+  }
+  await assertOk(res, "deleteBoardComment");
+}
+
+export async function updateBoardComment(
+  commentId: number,
+  content: string,
+  boardId?: number
+): Promise<BoardComment> {
+  // 1) 우선 /api/comments/{id} PATCH
+  let res = await fetch(`${API_BASE}/api/comments/${commentId}`, {
+    method: "PATCH",
+    headers: withAuthHeaders({ "Content-Type": "application/json" }),
+    credentials: "include",
+    body: JSON.stringify({ content }),
+  });
+  // 2) board-scope fallback
+  if (res.status === 404 && typeof boardId === "number") {
+    res = await fetch(`${API_BASE}/api/boards/${boardId}/comments/${commentId}`, {
+      method: "PATCH",
+      headers: withAuthHeaders({ "Content-Type": "application/json" }),
+      credentials: "include",
+      body: JSON.stringify({ content }),
+    });
+  }
+
+  await assertOk(res, "updateBoardComment");
+  const data = (await res.json()) as any;
+
+  // 응답 형태가 제각각이어도 UI가 안정적으로 돌아가게 normalize
+  return {
+    id: Number(data?.id ?? commentId),
+    boardId: Number(data?.boardId ?? data?.board_id ?? boardId ?? 0),
+    userId: Number(data?.userId ?? data?.user_id ?? 0),
+    userNickname: String(data?.userNickname ?? data?.user_nickname ?? ""),
+    content: String(data?.content ?? content),
+    createdAt: String(data?.createdAt ?? data?.created_at ?? new Date().toISOString()),
+    updatedAt: data?.updatedAt ?? data?.updated_at,
+  } as BoardComment;
+}
+  
