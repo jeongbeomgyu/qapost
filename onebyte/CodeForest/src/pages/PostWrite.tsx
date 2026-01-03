@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 import type { Editor } from "@tiptap/core";
 import { useRef } from "react";
@@ -9,10 +9,13 @@ import { fetchPublicCategoryTree, type PublicCategoryTree } from "../api/PublicC
 import { createBoard, fetchBoardDetail, updateBoard, type BoardDetail } from "../api/BoardApi";
 import { ApiError } from "../api/AuthApi";
 import { RichTextEditor } from "../components/editor/RichTextEditor";
+import { useAuth } from "../contexts/AuthContext";
 
 export function PostWritePage() {
   const navigate = useNavigate();
+  const location = useLocation();
   const [searchParams] = useSearchParams();
+  const { isLoggedIn } = useAuth();
   const params = useParams<{ id?: string }>();
   const editingBoardId = useMemo(() => {
     const n = Number(params.id);
@@ -20,7 +23,13 @@ export function PostWritePage() {
   }, [params.id]);
   const isEditMode = editingBoardId != null;
 
-  // ✅ /post/write?categoryId=26 형태로 들어온 소카테고리 id (create 모드에서만 사용)
+  // ✅ 방어: 라우트 보호가 있어도, 컴포넌트 단에서도 비로그인 접근 차단
+  useEffect(() => {
+    if (isLoggedIn) return;
+    const from = `${location.pathname}${location.search}`;
+    navigate(`/login?redirect=${encodeURIComponent(from)}`, { replace: true, state: { from } });
+  }, [isLoggedIn, location.pathname, location.search, navigate]);
+
   const queryCategoryId = useMemo(() => {
     const raw = searchParams.get("categoryId");
     if (!raw) return null;
@@ -32,7 +41,6 @@ export function PostWritePage() {
   const [loadingCategories, setLoadingCategories] = useState(true);
   const [categoriesError, setCategoriesError] = useState<string | null>(null);
 
-  // ✅ 2단 선택: 대카(group) / 소카(category)
   const [selectedGroupId, setSelectedGroupId] = useState<number | "">("");
   const [selectedCategoryId, setSelectedCategoryId] = useState<number | "">("");
   const [title, setTitle] = useState("");
@@ -59,7 +67,6 @@ export function PostWritePage() {
     })();
   }, []);
 
-  // ✅ edit 모드일 때 기존 게시글 로딩
   useEffect(() => {
     (async () => {
       if (!isEditMode || editingBoardId == null) return;
@@ -84,7 +91,6 @@ export function PostWritePage() {
     return (selectedGroup?.categories ?? []).slice().sort((a, b) => a.sortOrder - b.sortOrder);
   }, [selectedGroup]);
 
-  // ✅ 대카 변경 시 소카 초기화
   useEffect(() => {
     if (skipNextResetRef.current) {
       skipNextResetRef.current = false;
@@ -93,7 +99,6 @@ export function PostWritePage() {
     setSelectedCategoryId("");
   }, [selectedGroupId]);
 
-  // ✅ edit 모드: categoryId에 맞게 group/category 자동 선택
   useEffect(() => {
     if (!isEditMode) return;
     const categoryId = initialPost?.categoryId;
@@ -107,14 +112,12 @@ export function PostWritePage() {
     setSelectedCategoryId(categoryId);
   }, [isEditMode, initialPost?.categoryId, groups]);
 
-  // ✅ create 모드: /post/write?categoryId=소카ID 로 들어왔으면 기본 선택값 세팅
   useEffect(() => {
     if (isEditMode) return;
     if (appliedQueryPrefillRef.current) return;
     if (queryCategoryId == null) return;
     if (groups.length === 0) return;
 
-    // 이미 사용자가 선택을 변경했으면(또는 기본값이 이미 있음) 자동 세팅하지 않음
     if (selectedGroupId !== "" || selectedCategoryId !== "") {
       appliedQueryPrefillRef.current = true;
       return;
@@ -129,7 +132,6 @@ export function PostWritePage() {
     appliedQueryPrefillRef.current = true;
   }, [isEditMode, queryCategoryId, groups, selectedGroupId, selectedCategoryId]);
 
-  // ✅ edit 모드: 에디터에 기존 HTML content 세팅
   useEffect(() => {
     if (!isEditMode) return;
     if (!editor) return;
@@ -144,7 +146,6 @@ export function PostWritePage() {
     if (!selectedCategoryId) return toast.error("소카테고리를 선택해주세요.");
     if (!editor) return toast.error("에디터 초기화 중입니다. 잠시 후 다시 시도해주세요.");
 
-    // ✅ textarea state 금지: editor.getHTML() / getText() 사용
     const html = editor.getHTML();
     const text = editor.getText().replace(/\u00a0/g, " ").trim();
     if (!text) return toast.error("내용을 입력해주세요.");
@@ -163,7 +164,6 @@ export function PostWritePage() {
         const res = await createBoard({
           title: trimmedTitle,
           content: html,
-          // ✅ 제출 시 categoryId는 소카 id만 보낸다(대카는 저장 X)
           categoryId: Number(selectedCategoryId),
         });
         toast.success("게시글 등록 완료");
@@ -182,79 +182,9 @@ export function PostWritePage() {
     <div className="min-h-screen flex flex-col bg-white">
       <Header />
 
-      <div className="flex-1 w-full px-6 py-8">
-        {/* Top bar */}
-        <div className="flex flex-col gap-3 mb-6">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            {/* 대카 */}
-            <select
-              value={selectedGroupId}
-              onChange={(e) => setSelectedGroupId(e.target.value ? Number(e.target.value) : "")}
-              disabled={loadingCategories || !!categoriesError}
-              className="h-10 px-3 border border-border rounded-lg bg-white disabled:bg-secondary/30 disabled:cursor-not-allowed"
-            >
-              <option value="">대카테고리를 선택하세요</option>
-              {groups
-                .slice()
-                .sort((a, b) => a.groupSortOrder - b.groupSortOrder)
-                .map((g) => (
-                  <option key={g.groupId} value={g.groupId}>
-                    {g.groupName}
-                  </option>
-                ))}
-            </select>
-
-            {/* 소카 */}
-            <select
-              value={selectedCategoryId}
-              onChange={(e) => setSelectedCategoryId(e.target.value ? Number(e.target.value) : "")}
-              disabled={!selectedGroupId || loadingCategories || !!categoriesError}
-              className="h-10 px-3 border border-border rounded-lg bg-white disabled:bg-secondary/30 disabled:cursor-not-allowed"
-            >
-              <option value="">
-                {!selectedGroupId ? "대카테고리를 먼저 선택하세요" : "소카테고리를 선택하세요"}
-              </option>
-              {selectedGroupId &&
-                categoryOptions.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name}
-                  </option>
-                ))}
-            </select>
-          </div>
-
-          <div className="flex items-center justify-between gap-3">
-            <div className="flex items-center gap-3">
-              {loadingCategories && <span className="text-xs text-muted-foreground">카테고리 로딩중...</span>}
-              {loadingPost && <span className="text-xs text-muted-foreground">게시글 불러오는 중...</span>}
-              {categoriesError && (
-                <span className="text-xs text-red-600">카테고리 로딩 실패: {categoriesError}</span>
-              )}
-            </div>
-
-            <div className="flex items-center gap-3">
-            <button
-              type="button"
-              onClick={() => navigate(-1)}
-              disabled={loading}
-              className="h-10 px-5 border border-border rounded-lg hover:bg-secondary/30 disabled:opacity-60 disabled:cursor-not-allowed"
-            >
-              취소
-            </button>
-            <button
-              type="button"
-              onClick={handleSubmit}
-              disabled={loading}
-              className="h-10 px-5 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-60 disabled:cursor-not-allowed"
-            >
-              {loading ? (isEditMode ? "수정 중..." : "등록 중...") : isEditMode ? "수정" : "등록"}
-            </button>
-            </div>
-          </div>
-        </div>
-
-        {/* Title */}
-        <div className="pb-4 border-b border-border mb-6">
+      <div className="flex-1 w-full max-w-5xl mx-auto px-6 py-8">
+        {/* ✅ 제목 */}
+        <div className="mb-5">
           <input
             value={title}
             onChange={(e) => setTitle(e.target.value)}
@@ -263,16 +193,67 @@ export function PostWritePage() {
           />
         </div>
 
-        {/* Editor */}
+        {/* ✅ 카테고리 선택 */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
+          <select
+            value={selectedGroupId}
+            onChange={(e) => setSelectedGroupId(e.target.value ? Number(e.target.value) : "")}
+            disabled={loadingCategories || !!categoriesError}
+            className="h-10 px-3 border border-border rounded-lg bg-white disabled:bg-secondary/30 disabled:cursor-not-allowed"
+          >
+            <option value="">대카테고리를 선택하세요</option>
+            {groups
+              .slice()
+              .sort((a, b) => a.groupSortOrder - b.groupSortOrder)
+              .map((g) => (
+                <option key={g.groupId} value={g.groupId}>
+                  {g.groupName}
+                </option>
+              ))}
+          </select>
+
+          <select
+            value={selectedCategoryId}
+            onChange={(e) => setSelectedCategoryId(e.target.value ? Number(e.target.value) : "")}
+            disabled={!selectedGroupId || loadingCategories || !!categoriesError}
+            className="h-10 px-3 border border-border rounded-lg bg-white disabled:bg-secondary/30 disabled:cursor-not-allowed"
+          >
+            <option value="">
+              {!selectedGroupId ? "대카테고리를 먼저 선택하세요" : "소카테고리를 선택하세요"}
+            </option>
+            {selectedGroupId &&
+              categoryOptions.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                </option>
+              ))}
+          </select>
+        </div>
+
+        {/* 상태 텍스트 */}
+        <div className="flex items-center gap-3 mb-5">
+          {loadingCategories && <span className="text-xs text-muted-foreground">카테고리 로딩중...</span>}
+          {loadingPost && <span className="text-xs text-muted-foreground">게시글 불러오는 중...</span>}
+          {categoriesError && <span className="text-xs text-red-600">카테고리 로딩 실패: {categoriesError}</span>}
+        </div>
+
+        {/* ✅ 에디터 */}
         <div className="rounded-lg border border-border p-4 bg-white">
-          <RichTextEditor
-            placeholder="내용을 입력하세요..."
-            onEditorReady={setEditor}
-          />
+          <RichTextEditor placeholder="내용을 입력하세요..." onEditorReady={setEditor} />
+        </div>
+
+        {/* ✅ 등록 버튼: 하단 중앙 */}
+        <div className="flex justify-center mt-6">
+          <button
+            type="button"
+            onClick={handleSubmit}
+            disabled={loading}
+            className="h-11 px-10 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-60 disabled:cursor-not-allowed"
+          >
+            {loading ? (isEditMode ? "수정 중..." : "등록 중...") : isEditMode ? "수정" : "등록"}
+          </button>
         </div>
       </div>
     </div>
   );
 }
-
-

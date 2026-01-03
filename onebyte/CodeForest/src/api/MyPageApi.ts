@@ -1,23 +1,5 @@
-import { toast } from "sonner";
-import { clearAccessToken, withAuthHeaders } from "./AuthApi";
 import type { UserLevel } from "../utils/userLevel";
-
-const API_BASE = "http://localhost:8080";
-
-function handleAuthFailure(status: number) {
-  if (status === 401) toast.error("로그인 필요");
-  if (status === 403) toast.error("권한 없음");
-  clearAccessToken();
-  window.location.assign("/login");
-}
-
-async function assertOk(res: Response, action: string) {
-  if (res.status === 401 || res.status === 403) {
-    handleAuthFailure(res.status);
-    throw new Error(`${action} unauthorized (${res.status})`);
-  }
-  if (!res.ok) throw new Error(`${action} failed: ${res.status}`);
-}
+import { http } from "./http";
 
 /**
  * ✅ 백엔드 MyPageInfoResponse에 맞춘 타입
@@ -40,7 +22,7 @@ export type MyPageInfo = {
   commentCount: number;
   level: UserLevel;
 
-  createdAt?: string | null; // 백엔드에 없으면 그냥 undefined
+  createdAt?: string | null;
 };
 
 function coerceUserLevel(level: unknown): UserLevel {
@@ -62,49 +44,33 @@ export type ChangePasswordRequest = {
 };
 
 export async function fetchMyPageInfo(): Promise<MyPageInfo> {
-  const res = await fetch(`${API_BASE}/api/mypage/info`, {
-    method: "GET",
-    headers: withAuthHeaders(),
-    credentials: "include",
-  });
-  await assertOk(res, "fetchMyPageInfo");
-
-  const data = (await res.json()) as any;
+  const data = await http<any>("/api/mypage/info", { method: "GET" });
 
   // ✅ 혹시 백엔드에서 count/level 누락돼도 화면 안 죽게 기본값
   return {
     ...data,
-    postCount: data.postCount ?? 0,
-    commentCount: data.commentCount ?? 0,
-    level: coerceUserLevel(data.level),
-  };
+    postCount: data?.postCount ?? 0,
+    commentCount: data?.commentCount ?? 0,
+    level: coerceUserLevel(data?.level),
+  } as MyPageInfo;
 }
 
 export async function updateMyPageInfo(body: UpdateMyPageInfoRequest): Promise<void> {
-  const res = await fetch(`${API_BASE}/api/mypage/info`, {
+  await http<void>("/api/mypage/info", {
     method: "PATCH",
-    headers: withAuthHeaders({ "Content-Type": "application/json" }),
-    credentials: "include",
-    body: JSON.stringify(body),
+    json: body,
   });
-  await assertOk(res, "updateMyPageInfo");
 }
 
 export async function changeMyPassword(body: ChangePasswordRequest): Promise<void> {
-  const res = await fetch(`${API_BASE}/api/mypage/password`, {
+  await http<void>("/api/mypage/password", {
     method: "PATCH",
-    headers: withAuthHeaders({ "Content-Type": "application/json" }),
-    credentials: "include",
-    body: JSON.stringify(body),
+    json: body,
   });
-  await assertOk(res, "changeMyPassword");
 }
 
 export async function withdrawMe(): Promise<void> {
-  const res = await fetch(`${API_BASE}/api/mypage/withdraw`, {
+  await http<void>("/api/mypage/withdraw", {
     method: "DELETE",
-    headers: withAuthHeaders(),
-    credentials: "include",
   });
-  await assertOk(res, "withdrawMe");
 }

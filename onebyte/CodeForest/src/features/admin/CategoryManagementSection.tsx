@@ -28,8 +28,9 @@ import {
   deleteCategory,
   reorderGroups,
   reorderCategories,
-} from "../../api/AdminCategoryApi"; 
-
+} from "../../api/AdminCategoryApi";
+import { useAuth } from "../../contexts/AuthContext";
+import { useNavigate, Link } from "react-router-dom";
 
 type ConfirmModalType = {
   type: "toggle-main" | "toggle-sub" | "delete";
@@ -108,7 +109,7 @@ function DraggableSubcategory({
           {subcategory.isActive ? "비활성화" : "활성화"}
         </button>
 
-        {/* 2) 수정 (활성/비활성 상관없이 가능) */}
+        {/* 2) 수정 */}
         <button
           onClick={() => onEdit(subcategory, categoryId)}
           className="px-3 py-1 text-xs border border-border rounded transition-colors text-foreground hover:bg-secondary/30"
@@ -117,7 +118,7 @@ function DraggableSubcategory({
           수정
         </button>
 
-        {/* 3) 삭제 (비활성 상태에서만 가능) */}
+        {/* 3) 삭제 (비활성만) */}
         <button
           onClick={() => !subcategory.isActive && onDelete(subcategory, categoryId)}
           disabled={subcategory.isActive}
@@ -243,7 +244,12 @@ function DraggableMainCategoryCard({
     </div>
   );
 }
+
 export function CategoryManagementSection() {
+  const { isLoggedIn, role } = useAuth();
+  const isAdmin = role === "ROLE_ADMIN";
+  const navigate = useNavigate();
+
   const [categories, setCategories] = useState<AdminCategory[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -286,9 +292,27 @@ export function CategoryManagementSection() {
   const isDirty = useMemo(() => snapshot(categories) !== initialSnapshotRef.current, [categories]);
 
   // =========================
+  // ✅ 권한 가드 (중요)
+  // =========================
+  useEffect(() => {
+    if (!isLoggedIn) {
+      // replace로 히스토리 더럽히지 말자
+      navigate("/login", { replace: true });
+      return;
+    }
+    if (isLoggedIn && !isAdmin) {
+      toast.error("권한 없음");
+      navigate("/", { replace: true });
+    }
+  }, [isLoggedIn, isAdmin, navigate]);
+
+  // =========================
   // 트리 조회 + 상태 동기화
   // =========================
   const refetchTree = async () => {
+    // ✅ 가드: 권한 없으면 호출 금지
+    if (!isLoggedIn || !isAdmin) return;
+
     const tree = await fetchCategoryTree();
     const mapped = mapTreeToAdmin(tree);
 
@@ -300,6 +324,14 @@ export function CategoryManagementSection() {
   };
 
   useEffect(() => {
+    // ✅ 관리자 아닐 때는 애초에 로딩 종료
+    if (!isLoggedIn || !isAdmin) {
+      setLoading(false);
+      return;
+    }
+
+    let alive = true;
+
     (async () => {
       try {
         setLoading(true);
@@ -307,11 +339,15 @@ export function CategoryManagementSection() {
       } catch (e) {
         toast.error("카테고리 트리 조회 실패");
       } finally {
-        setLoading(false);
+        if (alive) setLoading(false);
       }
     })();
+
+    return () => {
+      alive = false;
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [isLoggedIn, isAdmin]);
 
   // =========================
   // reorder
@@ -356,7 +392,9 @@ export function CategoryManagementSection() {
   // Toggle / Delete (서버 반영)
   // =========================
   const handleToggleMainCategoryStatus = (category: AdminCategory) => {
-    // ✅ 활성 대카테고리 최대 6개 제한 (비활성 -> 활성 시도 시 차단)
+    if (!isAdmin) return;
+
+    // ✅ 활성 대카테고리 최대 6개 제한
     if (!category.isActive) {
       const activeCount = categories.filter((c) => c.isActive).length;
       if (activeCount >= 6) {
@@ -373,6 +411,8 @@ export function CategoryManagementSection() {
   };
 
   const handleToggleSubcategoryStatus = (subcategory: AdminSubCategory, categoryId: string) => {
+    if (!isAdmin) return;
+
     setConfirmModal({
       type: "toggle-sub",
       item: subcategory,
@@ -382,11 +422,13 @@ export function CategoryManagementSection() {
   };
 
   const handleDeleteItem = (item: AdminCategory | AdminSubCategory, categoryId?: string) => {
+    if (!isAdmin) return;
     setConfirmModal({ type: "delete", item, categoryId });
   };
 
   const confirmAction = async () => {
     if (!confirmModal) return;
+    if (!isLoggedIn || !isAdmin) return;
 
     const { type, item, categoryId, nextIsActive } = confirmModal;
 
@@ -394,11 +436,13 @@ export function CategoryManagementSection() {
       if (type === "toggle-main") {
         const category = item as AdminCategory;
         const next = !!nextIsActive;
+
         await toggleGroupActive(Number(category.id), {
           name: category.name,
           sortOrder: category.order,
           isActive: next,
         });
+
         toast.success(`${category.name} ${next ? "활성화" : "비활성화"} 완료`);
         await refetchTree();
       }
@@ -406,12 +450,14 @@ export function CategoryManagementSection() {
       if (type === "toggle-sub") {
         const sub = item as AdminSubCategory;
         const next = !!nextIsActive;
+
         await toggleCategoryActive(Number(sub.id), {
           groupId: Number(categoryId ?? sub.parentId),
           name: sub.name,
           sortOrder: sub.order,
           isActive: next,
         });
+
         toast.success(`${sub.name} ${next ? "활성화" : "비활성화"} 완료`);
         await refetchTree();
       }
@@ -445,17 +491,17 @@ export function CategoryManagementSection() {
   };
 
   // =========================
-  // Edit Modal (추가/수정) - 서버 반영
+  // Edit Modal (추가/수정)
   // =========================
   const handleEditModalSave = async (name: string) => {
     if (!editModal) return;
+    if (!isLoggedIn || !isAdmin) return;
 
     const { type, categoryId, item } = editModal;
 
     try {
       if (type === "add-main") {
         const maxOrder = Math.max(...categories.map((c) => c.order), 0);
-        // ✅ 생성 기본값: 비활성(isActive=false)
         await createGroup({ name, sortOrder: maxOrder + 1, isActive: false });
         toast.success(`${name} 카테고리 추가 완료`);
         await refetchTree();
@@ -479,7 +525,6 @@ export function CategoryManagementSection() {
           groupId: Number(categoryId),
           name,
           sortOrder: maxOrder + 1,
-          // ✅ 생성 기본값: 비활성(isActive=false)
           isActive: false,
         });
         toast.success(`${name} 하위 카테고리 추가 완료`);
@@ -505,7 +550,7 @@ export function CategoryManagementSection() {
   };
 
   // =========================
-  // Save (reorder 저장만 우선)
+  // Save (reorder 저장만)
   // =========================
   const openSaveConfirm = () => {
     if (!isDirty) {
@@ -516,6 +561,8 @@ export function CategoryManagementSection() {
   };
 
   const doSave = async () => {
+    if (!isLoggedIn || !isAdmin) return;
+
     try {
       const orderedGroupIds = categories
         .slice()
@@ -537,7 +584,6 @@ export function CategoryManagementSection() {
       }
 
       toast.success("정렬 저장 완료");
-
       await refetchTree();
       setSaveModal({ open: false });
     } catch (e) {
@@ -559,9 +605,29 @@ export function CategoryManagementSection() {
     .slice()
     .sort((a, b) => a.order - b.order);
 
-  // ✅ early return (loading)
+  // ✅ 로딩
   if (loading) {
     return <div className="p-6 text-muted-foreground">카테고리 불러오는 중...</div>;
+  }
+
+  // ✅ 로그인/권한 안내 UI (가드용)
+  if (!isLoggedIn) {
+    return (
+      <div className="bg-white rounded-lg border border-border shadow-sm p-12 text-center">
+        <p className="text-muted-foreground mb-4">로그인이 필요합니다.</p>
+        <Link to="/login" className="text-primary hover:underline">
+          로그인 하러가기 →
+        </Link>
+      </div>
+    );
+  }
+
+  if (!isAdmin) {
+    return (
+      <div className="bg-white rounded-lg border border-border shadow-sm p-12 text-center">
+        <p className="text-muted-foreground">권한이 없습니다.</p>
+      </div>
+    );
   }
 
   return (
@@ -571,9 +637,7 @@ export function CategoryManagementSection() {
         <div className="w-[320px] flex flex-col">
           <div className="mb-6">
             <h3 className="mb-4">대카테고리</h3>
-            <p className="text-sm text-muted-foreground mb-4">
-              대분류 카테고리는 최대 6개까지 선택 가능합니다.
-            </p>
+            <p className="text-sm text-muted-foreground mb-4">대분류 카테고리는 최대 6개까지 선택 가능합니다.</p>
 
             <button
               onClick={() => setEditModal({ type: "add-main" })}
@@ -599,16 +663,12 @@ export function CategoryManagementSection() {
                     selectedCategoryId === category.id
                       ? "bg-primary/5 border-primary"
                       : category.isActive
-                      ? "bg-white border-border hover:bg-secondary/30"
-                      : "bg-white border-border"
+                        ? "bg-white border-border hover:bg-secondary/30"
+                        : "bg-white border-border"
                   } ${!category.isActive ? "bg-secondary/30 opacity-70" : ""}`}
                 >
                   <div className="flex items-center gap-2 flex-1 min-w-0">
-                    <span
-                      className={`flex-1 truncate ${
-                        !category.isActive ? "text-muted-foreground" : "text-foreground"
-                      }`}
-                    >
+                    <span className={`flex-1 truncate ${!category.isActive ? "text-muted-foreground" : "text-foreground"}`}>
                       {category.name}
                     </span>
                   </div>
@@ -646,7 +706,6 @@ export function CategoryManagementSection() {
                         if (category.isActive) return;
                         handleDeleteItem(category);
                       }}
-                      // ✅ 대카테고리 삭제는 비활성 상태에서만 가능
                       disabled={category.isActive}
                       className={`p-1.5 rounded transition-colors ${
                         !category.isActive ? "hover:bg-red-50" : "opacity-40 cursor-not-allowed"
@@ -701,7 +760,9 @@ export function CategoryManagementSection() {
                   toggleExpand={toggleExpand}
                   moveMainCategory={moveMainCategory}
                   moveSubcategory={moveSubcategory}
-                  onEditSubcategory={(sub, catId) => setEditModal({ type: "edit-sub", categoryId: catId, item: sub })}
+                  onEditSubcategory={(sub, catId) =>
+                    setEditModal({ type: "edit-sub", categoryId: catId, item: sub })
+                  }
                   onToggleSubcategoryStatus={handleToggleSubcategoryStatus}
                   onDeleteItem={handleDeleteItem}
                   onAddSubcategory={(catId) => setEditModal({ type: "add-sub", categoryId: catId })}
@@ -756,8 +817,8 @@ export function CategoryManagementSection() {
                   isDelete
                     ? "bg-red-600 text-white hover:bg-red-700"
                     : willActivate
-                    ? "bg-primary text-primary-foreground hover:bg-primary/90"
-                    : "bg-orange-600 text-white hover:bg-orange-700"
+                      ? "bg-primary text-primary-foreground hover:bg-primary/90"
+                      : "bg-orange-600 text-white hover:bg-orange-700"
                 }`}
               >
                 {isDelete ? "삭제" : willActivate ? "활성화" : "비활성화"}
@@ -767,7 +828,7 @@ export function CategoryManagementSection() {
         </>
       )}
 
-      {/* ✅ 활성 6개 제한 모달 */}
+      {/* 활성 6개 제한 모달 */}
       {limitModalOpen && (
         <>
           <div className="fixed inset-0 bg-black/50 z-50" onClick={() => setLimitModalOpen(false)} />

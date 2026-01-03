@@ -2,9 +2,9 @@ package org.example.onebyte.entity;
 
 import jakarta.persistence.*;
 import lombok.*;
+
 import java.util.ArrayList;
 import java.util.List;
-
 
 @Getter
 @Entity
@@ -15,7 +15,11 @@ import java.util.List;
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class CategoryGroup extends BaseCategoryEntity {
 
-    @OneToMany(mappedBy = "group")
+    @OneToMany(
+            mappedBy = "group",
+            cascade = CascadeType.ALL,      // group 삭제 -> categories 삭제
+            orphanRemoval = true            // group에서 category 제거 -> category 삭제
+    )
     @OrderBy("sortOrder ASC")
     private List<Category> categories = new ArrayList<>();
 
@@ -32,4 +36,13 @@ public class CategoryGroup extends BaseCategoryEntity {
                 .build();
     }
 
+    public void addCategory(Category category) {
+        this.categories.add(category);
+        category.changeGroup(this);
+    }
+
+    public void removeCategory(Category category) {
+        this.categories.remove(category);
+        category.changeGroup(null); // changeGroup이 null 허용하면 OK (아래 Category도 바꿔둠)
+    }
 }

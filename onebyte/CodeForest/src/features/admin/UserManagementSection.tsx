@@ -8,6 +8,8 @@ import {
   type AdminUser,
   type AdminUserStatusParam,
 } from "../../api/AdminUserApi";
+import { useAuth } from "../../contexts/AuthContext";
+import { Link } from "react-router-dom";
 
 type FilterType = "all" | "active" | "blocked" | "withdrawn";
 
@@ -39,7 +41,6 @@ function mapApiUserToUi(user: AdminUser): UiUser {
   };
 }
 
-
 function toStatusParam(filter: FilterType): AdminUserStatusParam {
   if (filter === "active") return "ACTIVE";
   if (filter === "blocked") return "BANNED";
@@ -48,6 +49,9 @@ function toStatusParam(filter: FilterType): AdminUserStatusParam {
 }
 
 export function UserManagementSection() {
+  const { isLoggedIn, role } = useAuth();
+  const isAdmin = role === "ROLE_ADMIN";
+
   const [users, setUsers] = useState<UiUser[]>([]);
   const [filter, setFilter] = useState<FilterType>("all");
   const [loading, setLoading] = useState(false);
@@ -70,12 +74,10 @@ export function UserManagementSection() {
     try {
       setLoading(true);
 
-      // ✅ 현재 탭 데이터
       const list = await fetchAdminUsers(toStatusParam(nextFilter));
       const uiItems = (list ?? []).map(mapApiUserToUi);
       setUsers(uiItems);
 
-      // ✅ 카운트는 백엔드가 안 주니까 4번 호출해서 계산
       const [allList, activeList, bannedList, withdrawnList] = await Promise.all([
         fetchAdminUsers("ALL"),
         fetchAdminUsers("ACTIVE"),
@@ -97,22 +99,21 @@ export function UserManagementSection() {
   };
 
   useEffect(() => {
+    // ✅ 로그인/관리자 아니면 호출 금지
+    if (!isLoggedIn || !isAdmin) {
+      setLoading(false);
+      setUsers([]);
+      return;
+    }
+
     loadUsers(filter);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filter]);
+  }, [filter, isLoggedIn, isAdmin]);
 
-  const filteredUsers = useMemo(() => {
-    // ✅ users 자체가 이미 탭 기준으로 들어오니까 굳이 필터링 필요 없음
-    // 그래도 혹시 안전하게 하고 싶으면 남겨도 됨
-    return users;
-  }, [users]);
+  const filteredUsers = useMemo(() => users, [users]);
 
   const getStatusLabel = (status: UiUserStatus) => {
-    const labels = {
-      active: "활성",
-      blocked: "차단",
-      withdrawn: "탈퇴",
-    };
+    const labels = { active: "활성", blocked: "차단", withdrawn: "탈퇴" };
     return labels[status];
   };
 
@@ -138,14 +139,10 @@ export function UserManagementSection() {
   };
 
   const handleBanUser = async () => {
-    if (!banReason.trim()) {
-      toast.error("차단 사유를 입력해주세요");
-      return;
-    }
+    if (!banReason.trim()) return toast.error("차단 사유를 입력해주세요");
     if (!selectedUser) return;
 
     try {
-      // ✅ 백엔드 id가 Long이니까 숫자로 변환
       await banAdminUser(Number(selectedUser.id), banReason.trim());
       toast.success(`${selectedUser.nickname} 회원을 차단했습니다`);
       handleCloseBanModal();
@@ -167,6 +164,7 @@ export function UserManagementSection() {
 
   const handleConfirmUnban = async () => {
     if (!unbanTarget) return;
+
     try {
       await unbanAdminUser(Number(unbanTarget.id));
       toast.success(`${unbanTarget.nickname} 회원의 차단을 해제했습니다`);
@@ -176,6 +174,27 @@ export function UserManagementSection() {
       toast.error(e?.message ?? "차단 해제 실패");
     }
   };
+
+  // ✅ 로그인 안 했으면 안내
+  if (!isLoggedIn) {
+    return (
+      <div className="bg-white rounded-lg border border-border shadow-sm p-12 text-center">
+        <p className="text-muted-foreground mb-4">로그인이 필요합니다.</p>
+        <Link to="/login" className="text-primary hover:underline">
+          로그인 하러가기 →
+        </Link>
+      </div>
+    );
+  }
+
+  // ✅ 관리자 아니면 안내
+  if (!isAdmin) {
+    return (
+      <div className="bg-white rounded-lg border border-border shadow-sm p-12 text-center">
+        <p className="text-muted-foreground">권한이 없습니다.</p>
+      </div>
+    );
+  }
 
   return (
     <>

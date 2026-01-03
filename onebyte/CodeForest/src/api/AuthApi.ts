@@ -26,18 +26,26 @@ export type LoginResponse = {
   refreshToken?: string;
 };
 
+/** ✅ 서버 응답에서 accessToken을 최대한 뽑아내는 함수 */
+function pickAccessToken(data: LoginResponse): string | null {
+  const raw = (data?.accessToken ?? data?.token ?? null) as string | null;
+  if (!raw) return null;
+  const v = raw.trim();
+  if (!v || v === "null" || v === "undefined") return null;
+  return v;
+}
+
 export async function loginApi(payload: LoginRequest): Promise<LoginResponse> {
   const res = await fetch(`${API_BASE}/api/users/login`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
     },
-    credentials: "include",
+    credentials: "include", // ✅ refreshToken 쿠키 받기
     body: JSON.stringify(payload),
   });
 
   if (!res.ok) {
-    // 백엔드가 메시지 주면 읽어보기
     let msg = `login failed: ${res.status}`;
     try {
       const data = await res.json();
@@ -46,7 +54,18 @@ export async function loginApi(payload: LoginRequest): Promise<LoginResponse> {
     throw new ApiError(msg, res.status);
   }
 
-  return res.json();
+  const data = (await res.json()) as LoginResponse;
+
+  // ✅ 여기! 로그인 성공 시 accessToken 저장
+  const accessToken = pickAccessToken(data);
+  if (!accessToken) {
+    // 백엔드가 accessToken을 안 주면 프론트는 인증 불가능이라 에러로 처리
+    throw new ApiError("login response에 accessToken이 없습니다.", 500);
+  }
+  saveAccessToken(accessToken);
+
+  // ✅ 정규화: accessToken 필드로 맞춰서 반환(나머지 코드가 쓰기 편함)
+  return { ...data, accessToken };
 }
 
 export type RegisterRequest = {
@@ -54,7 +73,6 @@ export type RegisterRequest = {
   nickname: string;
   email: string;
   password: string;
-  /** 서버에서도 confirm 검증(A안)할 때만 사용 (필요 없으면 보내지 않아도 됨) */
   passwordConfirm?: string;
 };
 
@@ -62,10 +80,7 @@ export type RegisterResponse = {
   message?: string;
 };
 
-// ✅ 프로젝트 로그인 경로가 /api/users/login 이므로, 회원가입도 /api/users/register 로 맞춤
-// (백엔드가 /api/auth/register 면 여기만 바꾸면 됨)
 export async function registerApi(payload: RegisterRequest): Promise<RegisterResponse> {
-  // passwordConfirm는 옵션: 백엔드가 받지 않으면 payload에서 제거하고 호출해도 OK
   const res = await fetch(`${API_BASE}/api/users/register`, {
     method: "POST",
     headers: {
@@ -84,7 +99,6 @@ export async function registerApi(payload: RegisterRequest): Promise<RegisterRes
     throw new ApiError(msg, res.status);
   }
 
-  // 백엔드가 message만 주거나 빈 바디를 줄 수도 있으니 안전하게 처리
   try {
     return (await res.json()) as RegisterResponse;
   } catch {
@@ -99,6 +113,7 @@ export function saveAccessToken(token: string) {
     return;
   }
   localStorage.setItem(TOKEN_STORAGE_KEY, trimmed);
+
   // legacy 키 정리(있으면 제거해서 혼동 방지)
   for (const k of LEGACY_TOKEN_KEYS) localStorage.removeItem(k);
 }

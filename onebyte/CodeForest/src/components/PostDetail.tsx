@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import { MessageCircle, ArrowLeft, MessageSquare } from "lucide-react";
-import { useChat } from "../contexts/ChatContext";
 import { toast } from "sonner";
 import DOMPurify from "dompurify";
 import {
@@ -15,6 +14,7 @@ import {
   type BoardComment,
   type BoardDetail,
 } from "../api/BoardApi";
+import { createOrGetChatRoom } from "../api/chatApi";
 
 // ✅ 너 프로젝트에 맞게 바꿔라 (useAuth에서 내 id 가져오기)
 import { useAuth } from "../contexts/AuthContext";
@@ -22,7 +22,6 @@ import { useAuth } from "../contexts/AuthContext";
 export function PostDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { openChatWithUser } = useChat();
 
   const { me, role, isLoggedIn } = useAuth(); // me?.id 사용
   const myId = me?.id ?? null;
@@ -46,6 +45,21 @@ export function PostDetail() {
   const [editingContent, setEditingContent] = useState("");
   const [savingCommentId, setSavingCommentId] = useState<number | null>(null);
   const [deletingCommentId, setDeletingCommentId] = useState<number | null>(null);
+
+  const startChat = async (receiverId: number) => {
+    if (!isLoggedIn) {
+      toast.error("로그인 필요");
+      navigate("/login");
+      return;
+    }
+    if (!post) return;
+    try {
+      const room = await createOrGetChatRoom(post.id, receiverId);
+      navigate(`/chat/room/${room.id}`);
+    } catch (e: any) {
+      toast.error(e?.message ?? "채팅방을 열 수 없습니다.");
+    }
+  };
 
   useEffect(() => {
     (async () => {
@@ -230,9 +244,7 @@ export function PostDetail() {
 
                 <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-muted-foreground">
                   <button
-                    onClick={() =>
-                      openChatWithUser(post.userNickname, String(post.userId), String(post.id))
-                    }
+                    onClick={() => startChat(post.userId)}
                     className="flex items-center gap-2 hover:text-primary transition-colors hover:underline group"
                   >
                     <span>{post.userNickname}</span>
@@ -305,13 +317,7 @@ export function PostDetail() {
                   <div key={comment.id} className="bg-white rounded-lg border border-border p-6">
                     <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
                       <button
-                        onClick={() =>
-                          openChatWithUser(
-                            comment.userNickname,
-                            String(comment.userId),
-                            String(post.id)
-                          )
-                        }
+                        onClick={() => startChat(comment.userId)}
                         className="flex items-center gap-2 hover:text-primary transition-colors hover:underline group"
                       >
                         <span>{comment.userNickname}</span>

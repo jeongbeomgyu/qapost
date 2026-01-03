@@ -1,12 +1,19 @@
-import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useState, useEffect, useMemo } from "react";
+import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
-
-const API_BASE = "http://localhost:8080";
+import { loginApi } from "../api/AuthApi"; // ✅ 경로 너 프로젝트에 맞게!
 
 export default function LoginPage() {
   const navigate = useNavigate();
+  const location = useLocation();
+  const [searchParams] = useSearchParams();
   const { isLoggedIn, login } = useAuth();
+
+  const redirectTo = useMemo(() => {
+    const fromState = (location.state as any)?.from as string | undefined;
+    const fromQuery = searchParams.get("redirect") ?? undefined;
+    return fromState || fromQuery || "/";
+  }, [location.state, searchParams]);
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -16,11 +23,11 @@ export default function LoginPage() {
 
   // ✅ 이미 로그인 상태면 로그인 페이지 진입 막고 홈으로
   useEffect(() => {
-    if (isLoggedIn) navigate("/");
-  }, [isLoggedIn, navigate]);
+    if (isLoggedIn) navigate(redirectTo, { replace: true });
+  }, [isLoggedIn, navigate, redirectTo]);
 
   const onSubmit = async (e: React.FormEvent) => {
-    e.preventDefault(); // ✅ 튕김(새로고침) 방지
+    e.preventDefault();
     setError(null);
 
     if (!email.trim() || !password.trim()) {
@@ -31,38 +38,26 @@ export default function LoginPage() {
     try {
       setLoading(true);
 
-      // 🔥 너 백엔드 로그인 엔드포인트에 맞춰 바꿔야 함
-      // 예시: POST /api/auth/login  { email, password } -> { accessToken }
-      const res = await fetch(`${API_BASE}/api/users/login`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({ email, password }),
-      });
+      const data = await loginApi({ email, password });
 
-      if (!res.ok) {
-        // 디버깅 로그는 최소화 (필요하면 여기서만 임시로 켜면 됨)
-        if (res.status === 401 || res.status === 400) {
-          setError("로그인 정보가 올바르지 않습니다.");
-          return;
-        }
-        setError("잠시 후 다시 시도해주세요.");
-        return;
-      }
-    
-      const data = await res.json();
-    
-      // ✅ 너가 준 응답 형태 그대로
       const accessToken = data.accessToken;
       if (!accessToken) {
         setError("잠시 후 다시 시도해주세요.");
         return;
       }
-    
+
+      // ✅ AuthContext 상태도 갱신 (UI용)
       login(accessToken);
-      navigate("/");
-    } catch (err) {
-      setError("잠시 후 다시 시도해주세요.");
+
+      navigate(redirectTo, { replace: true });
+    } catch (err: any) {
+      const status = err?.status;
+
+      if (status === 401 || status === 400) {
+        setError("로그인 정보가 올바르지 않습니다.");
+      } else {
+        setError("잠시 후 다시 시도해주세요.");
+      }
     } finally {
       setLoading(false);
     }
@@ -71,6 +66,15 @@ export default function LoginPage() {
   return (
     <div className="min-h-[calc(100vh-64px)] flex items-center justify-center px-6">
       <div className="w-full max-w-md bg-white border border-border rounded-xl p-6 shadow-sm">
+        {/* ✅ 홈으로 돌아가기 버튼 */}
+        <button
+          type="button"
+          onClick={() => navigate("/")}
+          className="text-sm text-muted-foreground hover:text-foreground mb-4"
+        >
+          ← 홈으로 돌아가기
+        </button>
+
         <h1 className="text-xl font-semibold mb-6">로그인</h1>
 
         <form onSubmit={onSubmit} className="space-y-4">

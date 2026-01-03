@@ -17,8 +17,10 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-//표준 클래임
+
 import io.jsonwebtoken.Claims;
+import io.jsonwebtoken.ExpiredJwtException;
+import io.jsonwebtoken.JwtException;
 
 import java.time.LocalDateTime;
 
@@ -33,8 +35,8 @@ public class UserServiceImpl implements UserService {
     private final CookieUtil cookieUtil;
     private final JwtTokenizer jwtTokenizer;
 
-    //추후 변경가능
-    private long refreshMaxAgeSeconds = 24 * 60 * 60L;
+    // 추후 변경 가능
+    private final long refreshMaxAgeSeconds = 24 * 60 * 60L;
 
     // 회원가입
     @Override
@@ -91,7 +93,6 @@ public class UserServiceImpl implements UserService {
         return new MessageResponse("회원가입을 완료합니다.");
     }
 
-
     // 로그인
     @Override
     public TokenResponse login(LoginRequest request, HttpServletResponse response) {
@@ -99,11 +100,10 @@ public class UserServiceImpl implements UserService {
         User user = userRepository.findByEmail(request.getEmail())
                 .orElseThrow(() -> new AuthenticationFailedException("이메일 또는 비밀번호가 올바르지 않습니다."));
 
-        // 비활성 유저도 로그인 실패(메시지 통일)
+        // 상태 체크
         if (UserStatus.WITHDRAWN_BY_USER.equals(user.getStatus())) {
             throw new AuthenticationFailedException("이메일 또는 비밀번호가 올바르지 않습니다.");
-        }
-        else if (UserStatus.BANNED_BY_ADMIN.equals(user.getStatus())){
+        } else if (UserStatus.BANNED_BY_ADMIN.equals(user.getStatus())) {
             throw new AuthenticationFailedException("관리자에 의해 차단당한 사용자 입니다.");
         }
 
@@ -112,7 +112,7 @@ public class UserServiceImpl implements UserService {
             throw new AuthenticationFailedException("이메일 또는 비밀번호가 올바르지 않습니다.");
         }
 
-        // 토큰 생성
+        // accessToken 생성
         String accessToken = jwtTokenizer.createAccessToken(
                 user.getId(),
                 user.getEmail(),
@@ -121,6 +121,7 @@ public class UserServiceImpl implements UserService {
                 user.getRole()
         );
 
+        // refreshToken 생성
         String refreshToken = jwtTokenizer.createRefreshToken(
                 user.getId(),
                 user.getEmail(),
@@ -129,84 +130,84 @@ public class UserServiceImpl implements UserService {
                 user.getRole()
         );
 
+        // 유저당 1개 정책: 기존꺼 삭제 후 저장
         refreshTokenRepository.deleteByUserId(user.getId());
-        // 충돌 방지
         refreshTokenRepository.flush();
 
-        //추후 DB에서 직접 createdAt 생성될때 거기서 자동 할당 되는 방법 없는지 고려
-        RefreshToken rt = RefreshToken.builder()
-                .user(user)
-                .token(refreshToken)
-                .expiresAt(LocalDateTime.now().plusSeconds(refreshMaxAgeSeconds))
-                .build();
+        RefreshToken rt = RefreshToken.create(
+                user,
+                refreshToken,
+                LocalDateTime.now().plusSeconds(refreshMaxAgeSeconds)
+        );
 
         refreshTokenRepository.save(rt);
 
-        // refreshToken 쿠키 세팅 (CookieUtil 사용)
-        // **** 로그인 응답에 Set-Cookie  보냄
+        // refreshToken 쿠키 세팅
         cookieUtil.addRefreshTokenCookie(response, refreshToken, refreshMaxAgeSeconds);
 
-        // 바디에는 accessToken만 내려줌
+        // 바디에는 accessToken만
         return new TokenResponse(accessToken);
     }
 
-
     // 로그아웃(DB refresh 삭제 + 쿠키 만료)
-    @Transactional
+    @Override
     public ResponseEntity<MessageResponse> logout(String authorization, HttpServletResponse response) {
 
-        // 1) accessToken에서 userId 추출
         Long userId = jwtTokenizer.getUserIdFromToken(authorization);
 
-        // 2) DB refreshToken 삭제 (유저 기준)
         refreshTokenRepository.deleteByUserId(userId);
 
-        // 3) 쿠키 만료
         cookieUtil.expireRefreshTokenCookie(response);
 
         return ResponseEntity.ok(new MessageResponse("로그아웃이 되었습니다."));
     }
 
-    //토큰 재발급
+    // 토큰 재발급 (access + refresh 롤링 + 쿠키 갱신)
     @Override
-    public TokenResponse reissue(String refreshToken) {
+    public TokenResponse reissue(String refreshToken, HttpServletResponse response) {
 
         if (refreshToken == null || refreshToken.isBlank()) {
             throw new AuthenticationFailedException("refreshToken이 없습니다.");
         }
 
-        Claims claims = jwtTokenizer.parseRefreshToken(refreshToken);
+        // 1) refreshToken 검증/파싱 (만료/위조 예외 통일)
+        final Claims claims;
+        try {
+            claims = jwtTokenizer.parseRefreshToken(refreshToken);
+        } catch (ExpiredJwtException e) {
+            throw new AuthenticationFailedException("만료된 refreshToken 입니다.");
+        } catch (JwtException | IllegalArgumentException e) {
+            throw new AuthenticationFailedException("유효하지 않은 refreshToken 입니다.");
+        }
 
         Long userId = claims.get("userId", Long.class);
         if (userId == null) {
             throw new AuthenticationFailedException("refreshToken payload에 userId가 없습니다.");
         }
 
+        // 2) 유저 상태 체크
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new AuthenticationFailedException("유효하지 않은 refreshToken 입니다."));
 
-        if (UserStatus.WITHDRAWN_BY_USER .equals(user.getStatus())) {
+        if (UserStatus.WITHDRAWN_BY_USER.equals(user.getStatus())) {
             throw new AuthenticationFailedException("탈퇴한 사용자입니다.");
-        }
-        else if (UserStatus.BANNED_BY_ADMIN  .equals(user.getStatus())){
+        } else if (UserStatus.BANNED_BY_ADMIN.equals(user.getStatus())) {
             throw new AuthenticationFailedException("차단 당한 사용자입니다.");
         }
 
+        // 3) DB 저장된 refreshToken과 일치 확인
         RefreshToken saved = refreshTokenRepository.findByUserId(userId)
                 .orElseThrow(() -> new AuthenticationFailedException("유효하지 않은 refreshToken 입니다."));
 
-
-        // 저장된 DB 토큰 값과 유저 토큰 일치 확인
         if (!saved.getToken().equals(refreshToken)) {
             throw new AuthenticationFailedException("유효하지 않은 refreshToken 입니다.");
         }
 
-        //DB 만료 확인
-        if (saved.getExpiresAt().isBefore(LocalDateTime.now())) {
+        if (saved.isExpired()) {
             throw new AuthenticationFailedException("만료된 refreshToken 입니다.");
         }
 
-        //새 accessToken 발급
+        // 4) 새 accessToken 발급
         String newAccessToken = jwtTokenizer.createAccessToken(
                 user.getId(),
                 user.getEmail(),
@@ -214,6 +215,24 @@ public class UserServiceImpl implements UserService {
                 user.getNickname(),
                 user.getRole()
         );
+
+        // 5) refreshToken 롤링 + DB 갱신
+        String newRefreshToken = jwtTokenizer.createRefreshToken(
+                user.getId(),
+                user.getEmail(),
+                user.getName(),
+                user.getNickname(),
+                user.getRole()
+        );
+
+        saved.rotate(
+                newRefreshToken,
+                LocalDateTime.now().plusSeconds(refreshMaxAgeSeconds)
+        );
+
+        // 6) 쿠키 갱신
+        cookieUtil.addRefreshTokenCookie(response, newRefreshToken, refreshMaxAgeSeconds);
+
         return new TokenResponse(newAccessToken);
     }
 }

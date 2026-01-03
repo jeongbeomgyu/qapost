@@ -6,7 +6,9 @@ import lombok.RequiredArgsConstructor;
 import org.example.onebyte.dto.MessageResponse;
 import org.example.onebyte.dto.user.*;
 import org.example.onebyte.service.UserService;
+import org.example.onebyte.service.UserServiceImpl;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseCookie;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -47,9 +49,10 @@ public class UserController {
 
     @PostMapping("/reissue")
     public ResponseEntity<TokenResponse> reissue(
-            @CookieValue(name = "refreshToken", required = false) String refreshToken
+            @CookieValue(name = "refreshToken", required = false) String refreshToken,
+            HttpServletResponse response
     ) {
-        TokenResponse tokenResponse = userService.reissue(refreshToken);
-        return ResponseEntity.ok(tokenResponse);
+        return ResponseEntity.ok(userService.reissue(refreshToken, response));
     }
+
 }

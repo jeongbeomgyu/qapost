@@ -39,12 +39,18 @@ public class SecurityConfig {
 
         config.setAllowedOrigins(List.of(
                 "http://localhost:3000",
-                "http://127.0.0.1:3000"
+                "http://127.0.0.1:3000",
+                "http://localhost:5173",
+                "http://127.0.0.1:5173"
         ));
 
         config.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
         config.setAllowedHeaders(List.of("*"));
+
         config.setAllowCredentials(true);
+
+        // (선택) 프론트에서 Set-Cookie 같은 헤더가 필요하면 노출
+        config.setExposedHeaders(List.of("Set-Cookie"));
 
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/**", config);
@@ -56,7 +62,7 @@ public class SecurityConfig {
         JwtAuthenticationFilter jwtFilter = new JwtAuthenticationFilter(jwtTokenizer);
 
         http
-                .cors(cors -> {})
+                .cors(cors -> cors.configurationSource(corsConfigurationSource()))
                 .csrf(csrf -> csrf.disable())
                 .sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .exceptionHandling(ex -> ex.authenticationEntryPoint(authenticationEntryPoint))
@@ -71,10 +77,11 @@ public class SecurityConfig {
                                 "/error",
                                 "/api/users/register",
                                 "/api/users/login",
-                                "/api/users/reissue"
+                                "/api/users/reissue",
+                                "/ws-stomp/**"
                         ).permitAll()
 
-                        // ✅ public stats
+                        // public stats
                         .requestMatchers(HttpMethod.GET, "/api/community").permitAll()
 
                         // public read

@@ -35,11 +35,9 @@ public class Board {
     @Builder.Default
     private List<Comment> comments = new ArrayList<>();
 
-    // FK: users.id
     @Column(name = "user_id", nullable = false)
     private Long userId;
 
-    // 작성 당시 닉네임(스냅샷)
     @Column(name = "user_nickname", nullable = false, length = 50)
     private String userNickname;
 
@@ -54,16 +52,13 @@ public class Board {
     @Builder.Default
     private Long viewCount = 0L;
 
-    // 댓글 수 캐시 컬럼
     @Column(name = "comment_count", nullable = false)
     @Builder.Default
     private Long commentCount = 0L;
 
-    // DB에서 DEFAULT CURRENT_TIMESTAMP로 자동 세팅
     @Column(name = "created_at", nullable = false, updatable = false, insertable = false)
     private LocalDateTime createdAt;
 
-    // DB에서 ON UPDATE CURRENT_TIMESTAMP로 자동 갱신
     @Column(name = "updated_at", nullable = false, insertable = false, updatable = false)
     private LocalDateTime updatedAt;
 
@@ -89,7 +84,6 @@ public class Board {
         this.viewCount = (this.viewCount == null ? 0L : this.viewCount) + 1L;
     }
 
-    //  댓글 생성/삭제 시 사용 (단, 동시성은 repo에서 update 쿼리로 처리하는 게 더 안전함)
     public void increaseCommentCount() {
         this.commentCount = (this.commentCount == null ? 0L : this.commentCount) + 1L;
     }

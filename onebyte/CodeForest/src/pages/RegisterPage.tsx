@@ -74,8 +74,6 @@ export default function RegisterPage() {
 
     try {
       setLoading(true);
-      // ✅ 서버에서도 비밀번호 확인까지 검증(A안)하려면 passwordConfirm을 같이 보냄
-      // 백엔드가 confirm을 받지 않는다면 아래에서 passwordConfirm을 제거하면 됨.
       await registerApi({ name: n, nickname: nn, email: em, password: pw, passwordConfirm: pwc });
       toast.success("회원가입이 완료되었습니다. 로그인 해주세요.");
       navigate("/login");
@@ -93,6 +91,15 @@ export default function RegisterPage() {
   return (
     <div className="min-h-[calc(100vh-64px)] flex items-center justify-center px-6">
       <div className="w-full max-w-md bg-white border border-border rounded-xl p-6 shadow-sm">
+        {/* ✅ 홈으로 돌아가기 버튼 */}
+        <button
+          type="button"
+          onClick={() => navigate("/")}
+          className="text-sm text-muted-foreground hover:text-foreground mb-4"
+        >
+          ← 홈으로 돌아가기
+        </button>
+
         <div className="flex items-center justify-between mb-6">
           <h1 className="text-xl font-semibold">회원가입</h1>
           <Link to="/login" className="text-sm text-primary hover:underline">
@@ -155,7 +162,9 @@ export default function RegisterPage() {
                 {showPassword ? "숨기기" : "보기"}
               </button>
             </div>
-            <div className="mt-1 text-xs text-muted-foreground">비밀번호는 8~64자 (정책이 있으면 서버 기준으로 적용)</div>
+            <div className="mt-1 text-xs text-muted-foreground">
+              비밀번호는 8~64자 (정책이 있으면 서버 기준으로 적용)
+            </div>
           </div>
 
           <div>
@@ -179,9 +188,7 @@ export default function RegisterPage() {
                 {showPasswordConfirm ? "숨기기" : "보기"}
               </button>
             </div>
-            {passwordMismatch && (
-              <div className="mt-1 text-xs text-red-600">비밀번호가 일치하지 않습니다.</div>
-            )}
+            {passwordMismatch && <div className="mt-1 text-xs text-red-600">비밀번호가 일치하지 않습니다.</div>}
           </div>
 
           <button
@@ -196,5 +203,3 @@ export default function RegisterPage() {
     </div>
   );
 }
-
-

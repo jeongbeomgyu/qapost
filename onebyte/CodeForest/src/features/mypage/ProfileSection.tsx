@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Mail, Calendar, Globe, Edit2, Save, X, Lock, AlertTriangle } from "lucide-react";
+import { Mail, Globe, Edit2, Save, X, Lock, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
 import {
   changeMyPassword,
@@ -9,6 +9,7 @@ import {
   type MyPageInfo,
 } from "../../api/MyPageApi";
 import { clearAccessToken } from "../../api/AuthApi";
+import { useAuth } from "../../contexts/AuthContext";
 
 function formatDate(iso?: string | null) {
   if (!iso) return "-";
@@ -18,6 +19,8 @@ function formatDate(iso?: string | null) {
 }
 
 export function ProfileSection() {
+  const { isLoggedIn } = useAuth();
+
   const [loading, setLoading] = useState(true);
 
   const [isEditing, setIsEditing] = useState(false);
@@ -61,17 +64,33 @@ export function ProfileSection() {
   };
 
   useEffect(() => {
+    // ✅ 로그인 안 했으면 호출 금지
+    if (!isLoggedIn) {
+      setLoading(false);
+      setMe(null);
+      return;
+    }
+
+    let alive = true;
+
     (async () => {
       try {
         setLoading(true);
         await loadMe();
       } catch (e: any) {
+        // http.ts가 401 처리(재발급/리다이렉트)까지 할 거라서
+        // 여기서는 UI만 덜 깨지게 처리
+        console.error(e);
         toast.error(e?.message ?? "내 정보 조회 실패");
       } finally {
-        setLoading(false);
+        if (alive) setLoading(false);
       }
     })();
-  }, []);
+
+    return () => {
+      alive = false;
+    };
+  }, [isLoggedIn]);
 
   const handleSave = async () => {
     if (!me) return;
@@ -93,7 +112,7 @@ export function ProfileSection() {
       });
       toast.success("프로필이 저장되었습니다");
 
-      await loadMe(); // 서버값으로 재동기화
+      await loadMe();
       setIsEditing(false);
     } catch (e: any) {
       toast.error(e?.message ?? "프로필 저장 실패");
@@ -132,7 +151,6 @@ export function ProfileSection() {
       await withdrawMe();
       toast.success("회원 탈퇴가 완료되었습니다");
 
-      // 로그아웃 처리
       clearAccessToken();
       window.location.assign("/");
     } catch (e: any) {
@@ -141,6 +159,11 @@ export function ProfileSection() {
       setShowWithdrawModal(false);
     }
   };
+
+  // ✅ 로그인 안 했으면 마이페이지 섹션 자체를 보여주지 않거나, 안내 띄우기
+  if (!isLoggedIn) {
+    return <div className="p-6 text-muted-foreground">로그인이 필요합니다.</div>;
+  }
 
   if (loading) {
     return <div className="p-6 text-muted-foreground">불러오는 중...</div>;

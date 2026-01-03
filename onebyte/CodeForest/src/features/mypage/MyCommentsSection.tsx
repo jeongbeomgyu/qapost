@@ -1,9 +1,9 @@
-// src/features/mypage/MyCommentsSection.tsx
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { Calendar, Search } from "lucide-react";
 import { toast } from "sonner";
 import { deleteMyComment, fetchMyComments, type MyComment } from "../../api/MyPageContentApi";
+import { useAuth } from "../../contexts/AuthContext";
 
 type UiComment = {
   id: number;
@@ -37,6 +37,8 @@ function mapToUi(c: MyComment): UiComment {
 }
 
 export function MyCommentsSection() {
+  const { isLoggedIn } = useAuth();
+
   const [searchQuery, setSearchQuery] = useState("");
   const [loading, setLoading] = useState(false);
   const [comments, setComments] = useState<UiComment[]>([]);
@@ -46,20 +48,41 @@ export function MyCommentsSection() {
     try {
       setLoading(true);
       const data = await fetchMyComments(0, 50);
-      console.log("[MyCommentsSection] raw data =", data);
-      setComments(data.map(mapToUi));
+      setComments((data ?? []).map(mapToUi));
     } catch (e: any) {
-      console.error("[MyCommentsSection] error =", e);
       toast.error(e?.message ?? "내 댓글 조회 실패");
     } finally {
       setLoading(false);
     }
   };
-  
 
   useEffect(() => {
-    load();
-  }, []);
+    // ✅ 로그인 안 했으면 호출 금지
+    if (!isLoggedIn) {
+      setLoading(false);
+      setComments([]);
+      return;
+    }
+
+    let alive = true;
+
+    (async () => {
+      try {
+        setLoading(true);
+        const data = await fetchMyComments(0, 50);
+        if (!alive) return;
+        setComments((data ?? []).map(mapToUi));
+      } catch (e: any) {
+        toast.error(e?.message ?? "내 댓글 조회 실패");
+      } finally {
+        if (alive) setLoading(false);
+      }
+    })();
+
+    return () => {
+      alive = false;
+    };
+  }, [isLoggedIn]);
 
   const filtered = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
@@ -86,6 +109,17 @@ export function MyCommentsSection() {
       });
     }
   };
+
+  if (!isLoggedIn) {
+    return (
+      <div className="bg-white rounded-lg border border-border shadow-sm p-12 text-center">
+        <p className="text-muted-foreground mb-4">로그인이 필요합니다.</p>
+        <Link to="/login" className="text-primary hover:underline">
+          로그인 하러가기 →
+        </Link>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -131,38 +165,34 @@ export function MyCommentsSection() {
                   </h3>
                 </Link>
 
-                <div className="flex items-center gap-3 flex-shrink-0">
-                  <Link
-                    to={`/post/${c.boardId}`}
-                    className="text-xs text-muted-foreground hover:text-primary transition-colors"
-                  >
-                    원글 보기 →
-                  </Link>
-
-                </div>
+                <Link
+                  to={`/post/${c.boardId}`}
+                  className="text-xs text-muted-foreground hover:text-primary transition-colors flex-shrink-0"
+                >
+                  원글 보기 →
+                </Link>
               </div>
 
               <div className="px-6 py-4 space-y-3">
                 <div className="text-foreground whitespace-pre-wrap">{c.content}</div>
 
-
                 <div className="flex items-center justify-between text-sm text-muted-foreground">
                   <div className="flex items-center gap-1">
                     <Calendar className="w-4 h-4" />
                     <span>{c.createdAt}</span>
-
                   </div>
+
                   <button
-                      onClick={() => handleDelete(c.id)}
-                      disabled={deletingIds.has(c.id)}
-                      className={`px-3 py-1 text-xs rounded border transition-colors ${
-                        deletingIds.has(c.id)
-                          ? "border-red-200 text-red-300 opacity-60 cursor-not-allowed"
-                          : "border-red-300 text-red-600 hover:bg-red-50"
-                      }`}
-                    >
-                      {deletingIds.has(c.id) ? "삭제중..." : "삭제"}
-                    </button> 
+                    onClick={() => handleDelete(c.id)}
+                    disabled={deletingIds.has(c.id)}
+                    className={`px-3 py-1 text-xs rounded border transition-colors ${
+                      deletingIds.has(c.id)
+                        ? "border-red-200 text-red-300 opacity-60 cursor-not-allowed"
+                        : "border-red-300 text-red-600 hover:bg-red-50"
+                    }`}
+                  >
+                    {deletingIds.has(c.id) ? "삭제중..." : "삭제"}
+                  </button>
                 </div>
               </div>
             </div>

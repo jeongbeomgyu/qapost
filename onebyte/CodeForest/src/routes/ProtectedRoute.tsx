@@ -1,6 +1,5 @@
 import type { ReactNode } from "react";
-import { Navigate } from "react-router-dom";
-import { getAccessToken } from "../api/AuthApi";
+import { Navigate, useLocation } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 
 type ProtectedRouteProps = {
@@ -10,10 +9,19 @@ type ProtectedRouteProps = {
 };
 
 export function ProtectedRoute({ children, requireAdmin = false }: ProtectedRouteProps) {
-  const token = getAccessToken();
-  const { role } = useAuth();
+  const location = useLocation();
+  const { role, isLoggedIn } = useAuth();
+  const from = `${location.pathname}${location.search}`;
 
-  if (!token) return <Navigate to="/login" replace />;
+  if (!isLoggedIn) {
+    return (
+      <Navigate
+        to={`/login?redirect=${encodeURIComponent(from)}`}
+        replace
+        state={{ from }}
+      />
+    );
+  }
 
   // role을 파싱할 수 있는 경우에만 관리자 체크
   if (requireAdmin && role && role !== "ROLE_ADMIN") {
