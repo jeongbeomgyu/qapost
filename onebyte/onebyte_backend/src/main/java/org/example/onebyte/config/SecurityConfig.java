@@ -73,6 +73,9 @@ public class SecurityConfig {
 
                 .authorizeHttpRequests(auth -> auth 
                         .requestMatchers("/favicon.ico").permitAll()
+
+                        .requestMatchers("/stomp-test.html").permitAll()
+
                         // CORS preflight (브라우저 OPTIONS) 무조건 허용
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
 
@@ -100,6 +103,9 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.PUT, "/api/categories/**").hasAuthority("ROLE_ADMIN")
                         .requestMatchers(HttpMethod.PATCH, "/api/categories/**").hasAuthority("ROLE_ADMIN")
                         .requestMatchers(HttpMethod.DELETE, "/api/categories/**").hasAuthority("ROLE_ADMIN")
+
+                        // WebSocket 접근 허용
+                        .requestMatchers("/ws-stomp/**").permitAll()
 
                         // 나머지는 로그인 필요
                         .anyRequest().authenticated()
