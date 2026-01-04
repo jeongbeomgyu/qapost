@@ -26,19 +26,19 @@ fi
 # 백엔드 Docker 이미지 빌드
 echo -e "\n${GREEN}[1/4] 백엔드 Docker 이미지 빌드 중...${NC}"
 cd onebyte_backend
-docker build -t jeongbeomgy/board-project-backend:latest .
+docker build -t jeongbeomgyu/board-project-backend:latest .
 cd ..
 
 # 프론트엔드 Docker 이미지 빌드
 echo -e "\n${GREEN}[2/4] 프론트엔드 Docker 이미지 빌드 중...${NC}"
-cd onebyte_test_frontend
+cd CodeForest
 docker build --build-arg VITE_API_URL=${API_URL} -t jeongbeomgy/board-project-frontend:latest .
 cd ..
 
 # Docker Hub에 푸시
 echo -e "\n${GREEN}[3/4] Docker Hub에 푸시 중...${NC}"
-docker push jeongbeomgy/board-project-backend:latest
-docker push jeongbeomgy/board-project-frontend:latest
+docker push jeongbeomgyu/board-project-backend:latest
+docker push jeongbeomgyu/board-project-frontend:latest
 
 echo -e "\n${GREEN}[4/4] 완료!${NC}"
 echo -e "${GREEN}=== 빌드 및 푸시 완료 ===${NC}"
