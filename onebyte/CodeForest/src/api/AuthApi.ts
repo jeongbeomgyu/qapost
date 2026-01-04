@@ -1,4 +1,5 @@
-const API_BASE = "http://localhost:8080";
+// http.ts에서 export한 API_BASE를 사용 (중복 제거)
+import { API_BASE } from "./http";
 
 // ✅ 단일 소스: 토큰 저장 키는 여기서만 관리
 export const TOKEN_STORAGE_KEY = "token";
