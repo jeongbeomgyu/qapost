@@ -1,7 +1,10 @@
 import { toast } from "sonner";
 import { getAccessToken, saveAccessToken, clearAccessToken } from "./AuthApi";
 
-export const API_BASE = "http://localhost:8080";
+// Vite 환경변수 사용 (빌드 시점에 주입됨)
+// 배포 환경: VITE_API_URL 환경변수로 설정 (예: http://44.220.167.111:8080)
+// 로컬 개발: 환경변수가 없으면 기본값 localhost:8080 사용
+export const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:8080";
 
 export class HttpError extends Error {
   status: number;
