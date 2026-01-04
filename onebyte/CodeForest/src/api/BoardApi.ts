@@ -1,7 +1,5 @@
 // src/api/BoardApi.ts
-import { http } from "./http";
-
-const API_BASE = "http://localhost:8080"; // (http.ts 내부에서 이미 쓰면 필요없는데, 일단 유지해도 됨)
+import { http, API_BASE } from "./http";
 
 /**
  * ======================
