@@ -20,16 +20,14 @@ jobs:
 
       - name: Build and Push Backend Image
         run: |
-          # ./onebyte_backend 앞에 onebyte/ 추가
           docker build --platform linux/amd64 -t ${{ secrets.DOCKERHUB_USERNAME }}/board-project-backend:latest ./onebyte/onebyte_backend
           docker push ${{ secrets.DOCKERHUB_USERNAME }}/board-project-backend:latest
 
       - name: Build and Push Frontend Image
         run: |
-          # ./onebyte_test_frontend 앞에 onebyte/ 추가
           docker build --no-cache --platform linux/amd64 \
             --build-arg VITE_API_URL=http://${{ secrets.EC2_IP }}:8080 \
-            -t ${{ secrets.DOCKERHUB_USERNAME }}/board-project-frontend:latest ./onebyte/onebyte_test_frontend
+            -t ${{ secrets.DOCKERHUB_USERNAME }}/board-project-frontend:latest ./onebyte/CodeForest
           docker push ${{ secrets.DOCKERHUB_USERNAME }}/board-project-frontend:latest
 
       - name: Copy Config Files to EC2
@@ -38,10 +36,8 @@ jobs:
           host: ${{ secrets.EC2_IP }}
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_SSH_KEY }}
-          # source 경로에 onebyte/ 추가
           source: "onebyte/docker-compose.yml,onebyte/deploy-ec2.sh"
           target: "~/onebyte"
-          # strip_components: 1 을 넣어야 EC2의 ~/onebyte 폴더 바로 밑에 파일이 들어갑니다.
           strip_components: 1
 
       - name: Execute Deployment Script
