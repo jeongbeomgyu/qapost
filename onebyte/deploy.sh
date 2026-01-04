@@ -32,6 +32,13 @@ if ! docker info | grep -q "Username"; then
     docker login
 fi
 
+# 백엔드 최신 소스코드를 jar 파일로 컴파일 
+echo -e "\n${GREEN}[0.5/5] 백엔드 Java 소스코드 빌드 중...${NC}"
+cd ./onebyte_backend
+chmod +x ./gradlew
+./gradlew clean build -x test
+cd ..
+
 # 백엔드 Docker 이미지 빌드
 echo -e "\n${GREEN}[1/5] 백엔드 Docker 이미지 빌드 중...${NC}"
 docker build --no-cache --platform linux/amd64 -t jeongbeomgyu/board-project-backend:latest ./onebyte_backend
