@@ -42,7 +42,7 @@ echo -e "\n${GREEN}[2/5] 프론트엔드 Docker 이미지 빌드 중...${NC}"
 docker build --no-cache \
   --platform linux/amd64 \
   --build-arg VITE_API_URL="${API_URL}" \
-  -t jeongbeomgyu/board-project-frontend:latest ./onebyte_test_frontend
+  -t jeongbeomgyu/board-project-frontend:latest ./CodeForest
 
 # Docker Hub에 푸시
 echo -e "\n${GREEN}[3/5] Docker Hub에 푸시 중...${NC}"
