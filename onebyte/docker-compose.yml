@@ -46,7 +46,7 @@ services:
     image: jeongbeomgyu/board-project-frontend:latest
     container_name: onebyte-frontend
     ports:
-      - "3000:80"
+      - "3000:80"  # 외부 3000 포트를 컨테이너 내부 Nginx 80 포트로 연결
     depends_on:
       - backend
     restart: unless-stopped
